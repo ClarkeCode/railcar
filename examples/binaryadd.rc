@@ -1,0 +1,32 @@
+//  1001 0111
+//  1101 0011
+//  =========
+//  1110 1010
+
+
+//  0000 0001
+//  1110 1111
+//  1111 0000
+r
+	(vr(vw0)(vw1)!^)
+	(2vw1!^)
+
+6[>
+	r
+	(
+		vr(vw0)(vw1)
+	)
+	(
+		vr(vw1)(vw0
+			&     //stake a flag
+			[
+				?<($)(-) //if cant move right, exit block, nop otherwise
+				<r
+					(w1)   
+					(w0#) //carry the 1 and return to block beginning
+			]
+			@     //return to flag
+		)
+	)
+	!^
+]
