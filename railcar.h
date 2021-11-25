@@ -45,6 +45,11 @@ typedef struct {
 
 struct Token;
 
+typedef struct ConditionalBranch{
+	struct Token* branch_end_false;
+	struct Token* branch_end_true;
+} ConditionalBranch;
+
 typedef struct Token{
 	int id;
 	TOKEN_TYPE type;
@@ -53,6 +58,8 @@ typedef struct Token{
 	struct Token* next_unconditional;
 	struct Token* next_if_true;
 	struct Token* next_if_false;
+
+	ConditionalBranch* conditional;
 } Token;
 
 // int Railcar_Lexer(char* fileName, Token** tokenArr);

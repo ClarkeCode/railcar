@@ -192,13 +192,20 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	Token* current;
 	for (size_t x = 0; x<num_tk; x++) {
 		current = tkArr+x;
+
+		if (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL) continue;
+
 		fprintf(fp, "%d [label=\"%s (%d)\"]", current->id, human(current->type), current->id);
 		if (current->next_unconditional)
 			fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
 		if (current->next_if_true)
-			fprintf(fp, "%d -> %d\n", current->id, current->next_if_true->id);
+			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
 		if (current->next_if_false)
-			fprintf(fp, "%d -> %d\n", current->id, current->next_if_false->id);
+			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
+		// if (current->conditional) {
+		// 	fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->branch_end_true->id);
+		// 	fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->branch_end_false->id);
+		// }
 	}
 	fprintf(fp, "}\n");
 }
@@ -237,21 +244,30 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 	assert(NUM_TOKEN_TYPE == 22 && "Unhandled Token");
 	for (; current < stopper; current++) {
 		//TODO: WARNING - does not properly check validity of lookahead/behind
-		if (current->type == OPEN_BLOCK) current->next_unconditional = current+1;
+		if (current->type == OPEN_BLOCK && !current->next_unconditional) current->next_unconditional = current+1;
 		//TODO: handle nested if/reads
 		if (current->type == HEAD_READ) {
 			current->next_if_false = next_token_of_type(current, stopper, OPEN_CONDITIONAL)+1;
 			current->next_if_true = next_token_of_type(current->next_if_false, stopper, OPEN_CONDITIONAL)+1;
+
+			//TODO: can probably make an optimization for the special case of r(-)(statements)
+			//      '(-)' can be recognized and change the next_if_false pointer to point to the end of the true branch
+			current->conditional = malloc(sizeof(ConditionalBranch));
+			current->conditional->branch_end_true = next_token_of_type(current->next_if_true, stopper, CLOSE_CONDITIONAL)+1;
+			current->conditional->branch_end_false = next_token_of_type(current->next_if_false, stopper, CLOSE_CONDITIONAL)-1;
+			current->conditional->branch_end_false->next_unconditional = current->conditional->branch_end_true;
+			(current->conditional->branch_end_true-2)->next_unconditional = current->conditional->branch_end_true;
+
 		}
-		if (current->type == NO_OPERATION) current->next_unconditional = current+1;
-		if (current->type == HEAD_WRITE) current->next_unconditional = current+1;
-		if (current->type == HEAD_LEFT) current->next_unconditional = current+1;
-		if (current->type == HEAD_RIGHT) current->next_unconditional = current+1;
+		if (current->type == NO_OPERATION && !current->next_unconditional) current->next_unconditional = current+1;
+		if (current->type == HEAD_WRITE && !current->next_unconditional) current->next_unconditional = current+1;
+		if (current->type == HEAD_LEFT && !current->next_unconditional) current->next_unconditional = current+1;
+		if (current->type == HEAD_RIGHT && !current->next_unconditional) current->next_unconditional = current+1;
 
 
 		//TODO: handle nested if/reads
-		if (current->type == OPEN_CONDITIONAL) current->next_unconditional = next_token_of_type(current, stopper, CLOSE_CONDITIONAL)+1;
-		if (current->type == CLOSE_CONDITIONAL) current->next_unconditional = current+1;
+		if (current->type == OPEN_CONDITIONAL && !current->next_unconditional) current->next_unconditional = next_token_of_type(current, stopper, CLOSE_CONDITIONAL)+1;
+		if (current->type == CLOSE_CONDITIONAL && !current->next_unconditional) current->next_unconditional = current+1;
 
 		if (current->type == LOOP_UNTIL_END) {
 			current->next_if_false = r_next_token_of_type(current, tokens-1, OPEN_BLOCK)->next_unconditional;
@@ -338,6 +354,7 @@ void Railcar_Simulator(Token* firstTk) {
 		// break;
 		current = nextTk;
 		char ch; scanf("%c", &ch);
+		if (ch == 'q') break;
 		
 		if (flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
@@ -379,6 +396,7 @@ int main(int argc, char* argv[]) {
 		shellEcho(".\\vendors\\Graphviz\\bin\\dot.exe -Tpng output.dot -O");
 		shellEcho(".\\vendors\\Graphviz\\bin\\dot.exe -Tsvg output.dot -O");
 	}
+
 	//Simulator
 	if (flags.step) {
 		printf("Stepper\n");
@@ -387,7 +405,7 @@ int main(int argc, char* argv[]) {
 		Railcar_Simulator(tkArr);
 	}
 
-	if (true) {
+	if (false) {
 		//TODO: work on use of ANSI escapes
 		//Resources:
 		//	https://solarianprogrammer.com/2019/04/08/c-programming-ansi-escape-codes-windows-macos-linux-terminals/
