@@ -163,6 +163,14 @@ char* human(TOKEN_TYPE ttype) {
 	return "unreachable";
 }
 
+bool type_in(TOKEN_TYPE t, TOKEN_TYPE* desiredTypes, size_t sz) {
+	for (size_t x = 0; x < sz; x++) {
+		if (*(desiredTypes+x) == t) return true;
+	}
+	return false;
+}
+
+
 //TODO: add sequence number to tokens to remove 'tkArr' argument
 void dump_token(FILE* fp, Token* tk) {
 	if (!tk) return;
@@ -182,30 +190,33 @@ void dump_token(FILE* fp, Token* tk) {
 }
 void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
 	for (size_t x = 0; x<num_tk; x++) {
-		dump_token(fp, tkArr+x, tkArr);
+		dump_token(fp, tkArr+x);
 	}
 }
 
 void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
+	const bool showConditionals = false;
 	fprintf(fp, "digraph {\n");
 	// fprintf(fp, "\tlayout=neato;\n");
 	Token* current;
 	for (size_t x = 0; x<num_tk; x++) {
 		current = tkArr+x;
 
-		if (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL) continue;
+		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
 
-		fprintf(fp, "%d [label=\"%s (%d)\"]", current->id, human(current->type), current->id);
+		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
+		if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
+		fprintf(fp, "\"]\n");
 		if (current->next_unconditional)
 			fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
 		if (current->next_if_true)
 			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
 		if (current->next_if_false)
 			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
-		// if (current->conditional) {
-		// 	fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->branch_end_true->id);
-		// 	fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->branch_end_false->id);
-		// }
+		if (showConditionals && current->conditional) {
+			fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->end_true->id);
+			fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->end_false->id);
+		}
 	}
 	fprintf(fp, "}\n");
 }
@@ -218,58 +229,89 @@ void usage(FILE* fp) {
 
 
 
-Token* _next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement) {
+Token* _next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement, bool skipBranches, bool testEquality) {
 	Token* test = current;
 	while (test != stopper) {
-		if (test->type == tk_t) return test;
+		if ((testEquality ? test->type == tk_t : test->type != tk_t)) return test;
+		if (skipBranches && test->conditional) {
+			test = test->conditional->end_true;
+		}
 		test += doIncrement ? 1 : -1;
 	}
 	return NULL;
 }
 Token* next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) {
-	return _next_token_of_type(current, stopper, tk_t, true);
+	return _next_token_of_type(current, stopper, tk_t, true, false, true);
 }
 
 Token* r_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) {
-	return _next_token_of_type(current, stopper, tk_t, false);
+	return _next_token_of_type(current, stopper, tk_t, false, false, true);
 }
 
 void Railcar_Parser(Token* tokens, size_t numTokens) {
 	Token* stopper = tokens + numTokens;
-	Token* current = tokens;
+	
 
 	//TODO: add error reporting and syntax checking to call
 
 	//TODO: lying here, need to handle all existing tokens
 	assert(NUM_TOKEN_TYPE == 22 && "Unhandled Token");
-	for (; current < stopper; current++) {
-		//TODO: WARNING - does not properly check validity of lookahead/behind
-		if (current->type == OPEN_BLOCK && !current->next_unconditional) current->next_unconditional = current+1;
-		//TODO: handle nested if/reads
-		if (current->type == HEAD_READ) {
-			current->next_if_false = next_token_of_type(current, stopper, OPEN_CONDITIONAL)+1;
-			current->next_if_true = next_token_of_type(current->next_if_false, stopper, OPEN_CONDITIONAL)+1;
 
+
+	//Iterate backwards through tokens which create conditional branches to cover nested conditions
+	for (Token* current = tokens + numTokens - 1; current != tokens-1; current--) {
+		if (current->type == HEAD_READ) {
 			//TODO: can probably make an optimization for the special case of r(-)(statements)
 			//      '(-)' can be recognized and change the next_if_false pointer to point to the end of the true branch
-			current->conditional = malloc(sizeof(ConditionalBranch));
-			current->conditional->branch_end_true = next_token_of_type(current->next_if_true, stopper, CLOSE_CONDITIONAL)+1;
-			current->conditional->branch_end_false = next_token_of_type(current->next_if_false, stopper, CLOSE_CONDITIONAL)-1;
-			current->conditional->branch_end_false->next_unconditional = current->conditional->branch_end_true;
-			(current->conditional->branch_end_true-2)->next_unconditional = current->conditional->branch_end_true;
-
+			ConditionalBranch* branch = current->conditional = malloc(sizeof(ConditionalBranch));
+			branch->creator = current;
+			branch->start_false = next_token_of_type(current, stopper, OPEN_CONDITIONAL);
+			branch->end_false   = _next_token_of_type(branch->start_false, stopper, CLOSE_CONDITIONAL, true, true, true);
+			branch->start_true  = _next_token_of_type(branch->end_false, stopper, OPEN_CONDITIONAL, true, true, true);
+			branch->end_true    = _next_token_of_type(branch->start_true, stopper, CLOSE_CONDITIONAL, true, true, true);
+			
+			branch->start_false->branchMember = branch;
+			branch->start_true->branchMember = branch;
+			branch->end_false->branchMember = branch;
+			branch->end_true->branchMember = branch;
+			
+			current->next_if_false = branch->start_false+1;
+			current->next_if_true = branch->start_true+1;
 		}
-		if (current->type == NO_OPERATION && !current->next_unconditional) current->next_unconditional = current+1;
-		if (current->type == HEAD_WRITE && !current->next_unconditional) current->next_unconditional = current+1;
-		if (current->type == HEAD_LEFT && !current->next_unconditional) current->next_unconditional = current+1;
-		if (current->type == HEAD_RIGHT && !current->next_unconditional) current->next_unconditional = current+1;
+	}
 
+	//Sets the next value of the last instruction in each conditional branch to be the next instruction not in a conditional
+	for (Token* current = tokens; current < stopper; current++) {
+		if (!current->conditional) continue;
+		Token* lastInstructionFalse = current->conditional->end_false-1;
+		Token* lastInstructionTrue = current->conditional->end_true-1;
+		Token* firstInstructionAfterBranch = current->conditional->end_true+1;
+		while (firstInstructionAfterBranch->branchMember) { //Handles nested conditionals
+			firstInstructionAfterBranch = firstInstructionAfterBranch->branchMember->end_true+1;
+		}
+		lastInstructionFalse->next_unconditional = lastInstructionTrue->next_unconditional = firstInstructionAfterBranch;
+	}
 
-		//TODO: handle nested if/reads
-		if (current->type == OPEN_CONDITIONAL && !current->next_unconditional) current->next_unconditional = next_token_of_type(current, stopper, CLOSE_CONDITIONAL)+1;
-		if (current->type == CLOSE_CONDITIONAL && !current->next_unconditional) current->next_unconditional = current+1;
+	TOKEN_TYPE passthrough[] = {
+		OPEN_BLOCK,
+		NO_OPERATION,
+		HEAD_WRITE,
+		HEAD_LEFT,
+		HEAD_RIGHT,
+		HEAD_UP,
+		HEAD_DOWN,
+		REPEAT_MOVE,
+		REPEAT_MOVE_MAX,
+		OPEN_CONDITIONAL,
+		CLOSE_CONDITIONAL
+	};
+	for (Token* current = tokens; current < stopper; current++) {
+		//TODO: WARNING - does not properly check validity of lookahead/behin
+		if (!current->next_unconditional && type_in(current->type, passthrough, sizeof(passthrough))) {
+			current->next_unconditional = current+1;
+		}
 
-		if (current->type == LOOP_UNTIL_END) {
+		if (current->type == LOOP_UNTIL_END || current->type == LOOP_UNTIL_BEGINNING) {
 			current->next_if_false = r_next_token_of_type(current, tokens-1, OPEN_BLOCK)->next_unconditional;
 			current->next_if_true = next_token_of_type(current, stopper, CLOSE_BLOCK);
 		}

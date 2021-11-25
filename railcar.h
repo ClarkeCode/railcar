@@ -46,8 +46,11 @@ typedef struct {
 struct Token;
 
 typedef struct ConditionalBranch{
-	struct Token* branch_end_false;
-	struct Token* branch_end_true;
+	struct Token* creator;
+	struct Token* start_false;
+	struct Token* start_true;
+	struct Token* end_false;
+	struct Token* end_true;
 } ConditionalBranch;
 
 typedef struct Token{
@@ -59,7 +62,8 @@ typedef struct Token{
 	struct Token* next_if_true;
 	struct Token* next_if_false;
 
-	ConditionalBranch* conditional;
+	ConditionalBranch* conditional; //Will be not NULL if this token creates a branch
+	ConditionalBranch* branchMember; //If the token belongs to a branch, this points to the info
 } Token;
 
 // int Railcar_Lexer(char* fileName, Token** tokenArr);
