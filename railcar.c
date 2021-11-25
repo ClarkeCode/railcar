@@ -5,10 +5,18 @@
 #include "railcar.h"
 #include <string.h>
 
+typedef struct {
+	bool step;
+	bool use_ansi;
+	bool graphviz;
+} Flags;
+Flags flags = {0};
+
 //Pass NULL as an argument to num_tokens if you do not want it to be incremented
 //Pass 0 as an argument to val if the token does not requre a value
 void create_token(size_t* num_tokens, Token* tk, TOKEN_TYPE tk_t, int val) {
 	if (tk) {
+		tk->id = *num_tokens;
 		tk->type = tk_t;
 		if (val != 0) tk->value = val;
 	}
@@ -156,19 +164,19 @@ char* human(TOKEN_TYPE ttype) {
 }
 
 //TODO: add sequence number to tokens to remove 'tkArr' argument
-void dump_token(FILE* fp, Token* tk, Token* tkArr) {
+void dump_token(FILE* fp, Token* tk) {
 	if (!tk) return;
 	bool lineInfo = false;
 	bool nextTk = true;
 	if (lineInfo) fprintf(fp, "%s:%lu:%lu ", tk->loc.file, tk->loc.line, tk->loc.character);
 	fprintf(fp, "TOKEN #%lu { %s",
-		tk-tkArr, human(tk->type));
+		tk->id, human(tk->type));
 	if (tk->type == HEAD_WRITE || tk->type == REPEAT_MOVE) 
 		fprintf(fp, " - '%d'", tk->value);
 	if (nextTk) {
-		if (tk->next_unconditional) fprintf(fp, " NU: %lu", tk->next_unconditional-tkArr);
-		if (tk->next_if_false) fprintf(fp, " NF: %lu",tk->next_if_false-tkArr);
-		if (tk->next_if_true) fprintf(fp, " NT: %lu",tk->next_if_true-tkArr);
+		if (tk->next_unconditional) fprintf(fp, " NU: %lu", tk->next_unconditional->id);
+		if (tk->next_if_false) fprintf(fp, " NF: %lu",tk->next_if_false->id);
+		if (tk->next_if_true) fprintf(fp, " NT: %lu",tk->next_if_true->id);
 	}
 	fprintf(fp, "}\n");
 }
@@ -184,9 +192,7 @@ void usage(FILE* fp) {
 	fprintf(fp, "	step     //step through tokens one-at-a-time");
 }
 
-typedef struct {
-	bool step;
-} Flags;
+
 
 Token* _next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement) {
 	Token* test = current;
@@ -262,6 +268,7 @@ void Railcar_Simulator(Token* firstTk) {
 	size_t x_pos = 0;
 	size_t y_pos = 0;
 
+	if (flags.use_ansi) { printf("\x1b[s***"); }//Save cursor position
 	Token* current = NULL;
 	while (!current || current->next_unconditional || current->next_if_false || current->next_if_true) {
 		char* selectedByte = y_pos == 0 ? &input_byte : &output_byte;
@@ -273,19 +280,19 @@ void Railcar_Simulator(Token* firstTk) {
 		// binary_str_from_byte(output_byte, buff, true);
 		// printf("%c %s\n", y_pos == 1 ? '>' : ' ', buff);
 
-		printf("\nExecuting: "); dump_token(stdout, current, firstTk);
+		printf("\nExecuting: "); dump_token(stdout, current);
 
 		Token* nextTk = NULL;
 		if (!current) {
 			nextTk = firstTk;
-			printf("\nNext TK: "); dump_token(stdout, nextTk, firstTk);
+			printf("\nNext TK: "); dump_token(stdout, nextTk);
 			printf("-----------\n");
 			current = nextTk;
 			continue;
 		}
 		else if (current->next_unconditional) {
 			nextTk = current->next_unconditional;
-			printf("Next TK: "); dump_token(stdout, nextTk, firstTk);
+			printf("Next TK: "); dump_token(stdout, nextTk);
 		}
 		
 		if (current->type == HEAD_READ) {
@@ -293,14 +300,14 @@ void Railcar_Simulator(Token* firstTk) {
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			printf("Read head got '%d'\nNext TK: ", result); dump_token(stdout, nextTk, firstTk);
+			printf("Read head got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
 		}
 		if (current->type == LOOP_UNTIL_END) {
 			bool result = x_pos == 8;
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			printf("At end got '%d'\nNext TK: ", result); dump_token(stdout, nextTk, firstTk);
+			printf("At end got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
 		}
 		if (current->type == HEAD_LEFT) {x_pos--;}
 		if (current->type == HEAD_RIGHT) {x_pos++;}
@@ -313,6 +320,9 @@ void Railcar_Simulator(Token* firstTk) {
 
 		// break;
 		current = nextTk;
+		char ch; scanf("%c", &ch);
+		
+		if (flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
 	printf("No more tokens, Final state: \n");
 	char buff[10] = {0};
@@ -321,9 +331,11 @@ void Railcar_Simulator(Token* firstTk) {
 }
 
 int main(int argc, char* argv[]) {
-	Flags flags = {0};
+	
 	//TODO: better argv handling
 	if (strcmp(argv[1], "step") == 0) flags.step = true;
+	flags.use_ansi = true;
+	flags.graphviz = true;
 	char* fileName = argv[flags.step ? 2 : 1];
 
 	//Lexer
@@ -338,18 +350,25 @@ int main(int argc, char* argv[]) {
 	//Simulator
 	if (flags.step) {
 		printf("Stepper\n");
+		// if (flags.use_ansi) { printf("\x1b[s***"); }//Save cursor position
+
 		Railcar_Simulator(tkArr);
 	}
 
-	if (false) {
+	if (true) {
 		//TODO: work on use of ANSI escapes
 		//Resources:
 		//	https://solarianprogrammer.com/2019/04/08/c-programming-ansi-escape-codes-windows-macos-linux-terminals/
 		//	https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#cursor-navigation
 		//	https://rosettacode.org/wiki/Terminal_control/Cursor_positioning#C.2FC.2B.2B
 		//	https://youtu.be/kLj-H1K317U?t=4855
-		printf("ABCDEF");printf("\x1b[4dGHIJK\n");
+		printf("ABCDEF");
+		// printf("\x1b[4C\x1b[4AGHIJK\n");
 		printf("\x1b[32mHello, World\n");
+		printf("TWELVE");
+		printf("\x1b[1000D\x1b[0K");
+		// printf("\x1b[2J");
+		printf("Savage\n");
 		// printf("\x1b[2J");  //Clear the screen
 		// Reset colors to defaults
 		printf("\x1b[0mtesting\n");

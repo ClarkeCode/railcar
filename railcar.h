@@ -46,6 +46,7 @@ typedef struct {
 struct Token;
 
 typedef struct Token{
+	int id;
 	TOKEN_TYPE type;
 	int value;
 	Location loc;
