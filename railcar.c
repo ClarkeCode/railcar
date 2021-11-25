@@ -186,6 +186,23 @@ void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
 	}
 }
 
+void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
+	fprintf(fp, "digraph {\n");
+	// fprintf(fp, "\tlayout=neato;\n");
+	Token* current;
+	for (size_t x = 0; x<num_tk; x++) {
+		current = tkArr+x;
+		fprintf(fp, "%d [label=\"%s (%d)\"]", current->id, human(current->type), current->id);
+		if (current->next_unconditional)
+			fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
+		if (current->next_if_true)
+			fprintf(fp, "%d -> %d\n", current->id, current->next_if_true->id);
+		if (current->next_if_false)
+			fprintf(fp, "%d -> %d\n", current->id, current->next_if_false->id);
+	}
+	fprintf(fp, "}\n");
+}
+
 void usage(FILE* fp) {
 	fprintf(fp, "USAGE: ./railcar.exe <subcommand> filename\n");
 	fprintf(fp, "\nSUBCOMMANDS:\n");
@@ -330,6 +347,13 @@ void Railcar_Simulator(Token* firstTk) {
 	printf("%s\n", buff);
 }
 
+
+void shellEcho(char* command) {
+	fprintf(stdout, "Running: %s\n", command);
+	int retcode = system(command);
+	fprintf(stdout, "%s %s\n", retcode==EXIT_SUCCESS ? "Success:" : "Failure", command);
+}
+
 int main(int argc, char* argv[]) {
 	
 	//TODO: better argv handling
@@ -347,6 +371,14 @@ int main(int argc, char* argv[]) {
 	Railcar_Parser(tkArr, num_tk);
 	dump_tokens(stdout, tkArr, num_tk);
 
+	if (flags.graphviz) {
+		FILE* fp = fopen("output.dot", "w");
+		if (fp) dump_tokens_to_dotfile(fp, tkArr, num_tk);
+		fclose(fp);
+
+		shellEcho(".\\vendors\\Graphviz\\bin\\dot.exe -Tpng output.dot -O");
+		shellEcho(".\\vendors\\Graphviz\\bin\\dot.exe -Tsvg output.dot -O");
+	}
 	//Simulator
 	if (flags.step) {
 		printf("Stepper\n");
