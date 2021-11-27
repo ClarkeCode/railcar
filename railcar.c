@@ -34,7 +34,11 @@ char procureNextChar(FILE* fp, size_t* line_tracker, size_t* char_tracker) {
 	}
 	return c;
 }
-
+char fpeek(FILE* stream) {
+	char temp = fgetc(stream);
+	ungetc(temp, stream);
+	return temp;
+}
 Token* Railcar_Lexer(char* fileName, size_t* tokenNum) {
 	FILE* lexf = fopen(fileName, "r");
 	if (!lexf) return NULL;
@@ -48,7 +52,7 @@ Token* Railcar_Lexer(char* fileName, size_t* tokenNum) {
 
 	char c;
 	while ((c = procureNextChar(lexf, &num_lines, &num_chars)) != EOF) {
-		assert(NUM_TOKEN_TYPE == 22 && "Unhandled Token");
+		assert(NUM_TOKEN_TYPE == 24 && "Unhandled Token");
 		Token* tk = tokens+num_tokens;
 		tk->loc.file = fileName;
 		tk->loc.line = num_lines;
@@ -61,7 +65,8 @@ Token* Railcar_Lexer(char* fileName, size_t* tokenNum) {
 		}
 		if (c == '\n' || c == ' ' || c == '\t') continue;
 		if (c >= '2' && c <= '9') {
-			create_token(&num_tokens, tk, REPEAT_MOVE, atoi(&c));
+			if (fpeek(lexf) == ']') create_token(&num_tokens, tk, LOOP_FIXED_AMOUNT, atoi(&c));
+			else create_token(&num_tokens, tk, REPEAT_MOVE, atoi(&c));
 			continue;
 		}
 		
@@ -95,6 +100,7 @@ Token* Railcar_Lexer(char* fileName, size_t* tokenNum) {
 			default:  create_token(&num_tokens, tk, UNKNOWN, 0);
 		}
 	}
+	create_token(&num_tokens, tokens+num_tokens, END_OF_PROGRAM, 0);
 	*tokenNum = num_tokens;
 
 	fclose(lexf);
@@ -141,15 +147,15 @@ void binary_str_from_byte(char byte, char* str, bool separateNibbles, int colour
 }
 
 char* human(TOKEN_TYPE ttype) {
-	assert(NUM_TOKEN_TYPE == 22 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 24 && "Unhandled Token");
 
 	switch (ttype) {
 		case NO_OPERATION: return "NOP"; break;
 
-		case HEAD_LEFT: return "H_LEFT"; break;
-		case HEAD_RIGHT: return "H_RIGHT"; break;
-		case HEAD_UP: return "H_UP"; break;
-		case HEAD_DOWN: return "H_DOWN"; break;
+		case HEAD_LEFT: return "LEFT"; break;
+		case HEAD_RIGHT: return "RIGHT"; break;
+		case HEAD_UP: return "UP"; break;
+		case HEAD_DOWN: return "DOWN"; break;
 		case REPEAT_MOVE: return "REPEAT_MOVE"; break;
 		case REPEAT_MOVE_MAX: return "REPEAT_MOVE_MAX"; break;
 		case CHECK_ABILITY_TO_MOVE: return "CHECK_ABILITY_TO_MOVE"; break;
@@ -169,10 +175,12 @@ char* human(TOKEN_TYPE ttype) {
 
 		case LOOP_UNTIL_END: return "LOOP_E"; break;
 		case LOOP_UNTIL_BEGINNING: return "LOOP_B"; break;
+		case LOOP_FIXED_AMOUNT: return "LOOP_FIXED_AMOUNT"; break;
 
 		case STAKE_FLAG: return "STAKE_FLAG"; break;
 		case RETURN_FLAG: return "RETURN_FLAG"; break;
 
+		case END_OF_PROGRAM: return "END_OF_PROGRAM"; break;
 		case UNKNOWN: return "UNKNOWN"; break;
 	};
 	return "unreachable";
@@ -211,6 +219,8 @@ void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
 
 void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	const bool showConditionals = false;
+	const bool showPairedTokens = true;
+	const bool showPrefixTokens = true;
 	fprintf(fp, "digraph {\n");
 	// fprintf(fp, "\tlayout=neato;\n");
 	Token* current;
@@ -220,6 +230,11 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
 
 		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
+		if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
+			fprintf(fp, " - %s", human((current+1)->type));
+		}
+
+		//Don't display the value of 0 except for the write operation
 		if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
 		fprintf(fp, "\"]\n");
 		if (current->next_unconditional)
@@ -231,6 +246,12 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 		if (showConditionals && current->conditional) {
 			fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->end_true->id);
 			fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->end_false->id);
+		}
+		if (showPairedTokens && current->paired_token && current < current->paired_token) {
+			fprintf(fp, "%d -> %d [color=\"green\" dir=\"both\"]\n", current->id, current->paired_token->id);
+		}
+		if (showPrefixTokens && current->prefix_token) {
+			fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_token->id, current->id);
 		}
 	}
 	fprintf(fp, "}\n");
@@ -244,7 +265,7 @@ void usage(FILE* fp) {
 
 
 
-Token* _next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement, bool skipBranches, bool testEquality) {
+Token* _find_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement, bool skipBranches, bool testEquality) {
 	Token* test = current;
 	while (test != stopper) {
 		if ((testEquality ? test->type == tk_t : test->type != tk_t)) return test;
@@ -255,43 +276,92 @@ Token* _next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool
 	}
 	return NULL;
 }
-Token* next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) {
-	return _next_token_of_type(current, stopper, tk_t, true, false, true);
+Token* find_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) {
+	return _find_next_token_of_type(current, stopper, tk_t, true, false, true);
 }
 
-Token* r_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) {
-	return _next_token_of_type(current, stopper, tk_t, false, false, true);
+Token* rfind_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) {
+	return _find_next_token_of_type(current, stopper, tk_t, false, false, true);
 }
 
+void setup_conditional_branch(Token* current, Token* tokens, Token* stopper) {
+	//TODO: can probably make an optimization for the special case of r(-)(statements)
+	//      '(-)' can be recognized and change the next_if_false pointer to point to the end of the true branch
+	ConditionalBranch* branch = current->conditional = malloc(sizeof(ConditionalBranch));
+	branch->creator = current;
+	branch->start_false = find_next_token_of_type(current, stopper, OPEN_CONDITIONAL);
+	branch->end_false   = _find_next_token_of_type(branch->start_false, stopper, CLOSE_CONDITIONAL, true, true, true);
+	branch->start_true  = _find_next_token_of_type(branch->end_false, stopper, OPEN_CONDITIONAL, true, true, true);
+	branch->end_true    = _find_next_token_of_type(branch->start_true, stopper, CLOSE_CONDITIONAL, true, true, true);
+	
+	branch->start_false->branchMember = branch;
+	branch->start_true->branchMember = branch;
+	branch->end_false->branchMember = branch;
+	branch->end_true->branchMember = branch;
+	
+	current->next_if_false = branch->start_false+1;
+	current->next_if_true = branch->start_true+1;
+}
+Token* next_nonconditional_token(Token* current, Token* stopper) {
+	Token* test = current+1;
+	if (test == stopper) return NULL;
+	while (test != stopper && test->branchMember) { test++; }
+	if (test == stopper) return NULL;
+	return test;
+}
+TOKEN_TYPE pair_type_lookup(TOKEN_TYPE actual, TOKEN_TYPE* firsts, TOKEN_TYPE* seconds, size_t sz) {
+	if (!(type_in(actual, firsts, sz) || type_in(actual, seconds, sz))) return UNKNOWN;
+	TOKEN_TYPE* search_area = type_in(actual, firsts, sz) ? firsts : seconds;
+	for (size_t x = 0; x < sz; x++) {
+		if (actual == search_area[x]) {
+			return (type_in(actual, firsts, sz) ? seconds[x] : firsts[x]); 
+		}
+	}
+	return UNKNOWN;
+}
+void attach_self_as_prefix(Token* prefix, Token* modifiedTk) { modifiedTk->prefix_token = prefix; }
 void Railcar_Parser(Token* tokens, size_t numTokens) {
 	Token* stopper = tokens + numTokens;
-	
+	Token* rstopper = tokens - 1;
 
-	//TODO: add error reporting and syntax checking to call
+	//TODO: add error reporting function and syntax checking to call
 
 	//TODO: lying here, need to handle all existing tokens
-	assert(NUM_TOKEN_TYPE == 22 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 24 && "Unhandled Token");
+
+	TOKEN_TYPE pairedtokens[] = {OPEN_BLOCK, CLOSE_BLOCK, STAKE_FLAG, RETURN_FLAG};
+	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK, STAKE_FLAG};
+	TOKEN_TYPE pairedcloser[] = {CLOSE_BLOCK, RETURN_FLAG};
+
+	{
+		Token* current = tokens; Token* last = stopper-1;
+		for (; current < last; current++) {
+			if (type_in(current->type, pairedcloser, sizeof(pairedcloser)) && !current->paired_token) {
+				fprintf(stderr, "ERROR: unpaired closing token '%s' at %s:%lu:%lu",
+					human(current->type), current->loc.file, current->loc.line, current->loc.character);
+			}
+			if (type_in(current->type, pairedopener, sizeof(pairedopener))) {
+				last = rfind_next_token_of_type(last, rstopper,
+					pair_type_lookup(current->type, pairedopener, pairedcloser, sizeof(pairedopener)));
+				if (!last || last <= current) {
+					fprintf(stderr, "ERROR: no pair found");
+				}
+				last->paired_token = current;
+				current->paired_token = last--;
+			}
+		}
+	}
 
 
 	//Iterate backwards through tokens which create conditional branches to cover nested conditions
-	for (Token* current = tokens + numTokens - 1; current != tokens-1; current--) {
+	for (Token* current = tokens + numTokens - 1; current != rstopper; current--) {
 		if (current->type == HEAD_READ) {
-			//TODO: can probably make an optimization for the special case of r(-)(statements)
-			//      '(-)' can be recognized and change the next_if_false pointer to point to the end of the true branch
-			ConditionalBranch* branch = current->conditional = malloc(sizeof(ConditionalBranch));
-			branch->creator = current;
-			branch->start_false = next_token_of_type(current, stopper, OPEN_CONDITIONAL);
-			branch->end_false   = _next_token_of_type(branch->start_false, stopper, CLOSE_CONDITIONAL, true, true, true);
-			branch->start_true  = _next_token_of_type(branch->end_false, stopper, OPEN_CONDITIONAL, true, true, true);
-			branch->end_true    = _next_token_of_type(branch->start_true, stopper, CLOSE_CONDITIONAL, true, true, true);
-			
-			branch->start_false->branchMember = branch;
-			branch->start_true->branchMember = branch;
-			branch->end_false->branchMember = branch;
-			branch->end_true->branchMember = branch;
-			
-			current->next_if_false = branch->start_false+1;
-			current->next_if_true = branch->start_true+1;
+			setup_conditional_branch(current, tokens, stopper);
+			attach_self_as_prefix(current, current+1);
+		}
+		if (current->type == CHECK_ABILITY_TO_MOVE) {
+			setup_conditional_branch(current, tokens, stopper);
+			attach_self_as_prefix(current, current+1);
 		}
 	}
 
@@ -309,6 +379,7 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 
 	TOKEN_TYPE passthrough[] = {
 		OPEN_BLOCK,
+		CLOSE_BLOCK,
 		NO_OPERATION,
 		HEAD_WRITE,
 		HEAD_LEFT,
@@ -318,17 +389,41 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 		REPEAT_MOVE,
 		REPEAT_MOVE_MAX,
 		OPEN_CONDITIONAL,
-		CLOSE_CONDITIONAL
+		CLOSE_CONDITIONAL,
+		STAKE_FLAG
 	};
 	for (Token* current = tokens; current < stopper; current++) {
 		//TODO: WARNING - does not properly check validity of lookahead/behin
 		if (!current->next_unconditional && type_in(current->type, passthrough, sizeof(passthrough))) {
-			current->next_unconditional = current+1;
+			current->next_unconditional = next_nonconditional_token(current, stopper);
+			if (current->type == REPEAT_MOVE || current->type == REPEAT_MOVE_MAX) {
+				attach_self_as_prefix(current, current+1);
+			}
 		}
 
 		if (current->type == LOOP_UNTIL_END || current->type == LOOP_UNTIL_BEGINNING) {
-			current->next_if_false = r_next_token_of_type(current, tokens-1, OPEN_BLOCK)->next_unconditional;
-			current->next_if_true = next_token_of_type(current, stopper, CLOSE_BLOCK);
+			current->next_if_false = rfind_next_token_of_type(current, rstopper, OPEN_BLOCK)->next_unconditional;
+			current->next_if_true = find_next_token_of_type(current, stopper, CLOSE_BLOCK);
+		}
+		if (current->type == LOOP_FIXED_AMOUNT) {
+			if (!(current+1)->paired_token)
+				fprintf(stderr, "ERROR: no pair to loop");
+			current->next_if_false = (current+1)->paired_token;
+			current->next_if_true = current+1;
+		}
+
+		if (current->type == RETURN_FLAG) {
+			current->paired_token = rfind_next_token_of_type(current, rstopper, STAKE_FLAG);
+			current->next_unconditional = next_nonconditional_token(current, stopper);
+		}
+		if (current->type == GOTO_BLOCK_END) {
+			current->next_unconditional = find_next_token_of_type(current, stopper, CLOSE_BLOCK);
+		}
+		if (current->type == GOTO_BLOCK_START) {
+			current->next_unconditional = rfind_next_token_of_type(current, rstopper, OPEN_BLOCK);
+		}
+		if (current->type == END_OF_PROGRAM && current != stopper-1) {
+			fprintf(stderr, "ERROR: '%s' token discovered at invalid position, check Lexer\n", human(current->type));
 		}
 	}
 }

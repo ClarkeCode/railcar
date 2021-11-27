@@ -27,9 +27,12 @@ typedef enum {
 
 	LOOP_UNTIL_END,
 	LOOP_UNTIL_BEGINNING,
+	LOOP_FIXED_AMOUNT,
 
 	STAKE_FLAG,
 	RETURN_FLAG,
+
+	END_OF_PROGRAM,
 
 	UNKNOWN,
 
@@ -53,6 +56,11 @@ typedef struct ConditionalBranch{
 	struct Token* end_true;
 } ConditionalBranch;
 
+typedef struct {
+	struct Token* senior;
+	struct Token* junior;
+} BidirectionalLinkage;
+
 typedef struct Token{
 	int id;
 	TOKEN_TYPE type;
@@ -61,6 +69,10 @@ typedef struct Token{
 	struct Token* next_unconditional;
 	struct Token* next_if_true;
 	struct Token* next_if_false;
+
+	struct Token* prefix_token; //If there is a modifier token before it ie: repeat/max_repeat
+	
+	struct Token* paired_token; //stake+return flag / open+close block
 
 	ConditionalBranch* conditional; //Will be not NULL if this token creates a branch
 	ConditionalBranch* branchMember; //If the token belongs to a branch, this points to the info
