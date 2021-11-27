@@ -335,25 +335,45 @@ char readByteAtPosition(char byte, size_t position) {
 	return (byte >> (7-position)) & 0x1;
 }
 
+void move_head(int* x_pos, int* y_pos, TOKEN_TYPE t, size_t repeats) {
+	for (size_t i = 0; i < repeats; i++) {
+		switch (t) {
+			case HEAD_LEFT:  (*x_pos)--; break;
+			case HEAD_RIGHT: (*x_pos)++; break;
+			case HEAD_UP:    (*y_pos)--; break;
+			case HEAD_DOWN:  (*y_pos)++; break;
+		}
+	}
+}
+
+void dump_program_state(FILE* fp, int x_pos, int y_pos, char* grid_bytes, size_t grid_size) {
+	fprintf(fp, " %c", x_pos == -1 ? 'v' : ' '); 
+	for(size_t x = 0; x < 9; x++) {if(x==4)fprintf(fp, " ");fprintf(fp, "%c", x == x_pos ? 'v' : ' ');}
+	fprintf(fp, "\n");
+
+	for (size_t x = 0; x < 3; x++) {
+		char buff[10] = {0};
+		binary_str_from_byte(*(grid_bytes+x), buff, true);
+		fprintf(fp, "%c %s\n", y_pos == x ? '>' : ' ', buff);
+	}
+}
+
 void Railcar_Simulator(Token* firstTk) {
 	//TODO: expand simulator to allow an arbitrary number of byte rows
-	char input_byte = byte_from_binary_str("0000 0101", true);
-	char output_byte = 0;
+	char grid_bytes[3] = {0};
+	*(grid_bytes+0) = byte_from_binary_str("0101 1100", true);
+	*(grid_bytes+1) = byte_from_binary_str("0011 0100", true);
+	*(grid_bytes+2) = 0;
 
-	size_t x_pos = 0;
-	size_t y_pos = 0;
+	int x_pos = 0;
+	int y_pos = 0;
 
-	if (flags.use_ansi) { printf("\x1b[s***"); }//Save cursor position
+	if (flags.use_ansi) { printf("\x1b[s***\n"); }//Save cursor position
 	Token* current = NULL;
 	while (!current || current->next_unconditional || current->next_if_false || current->next_if_true) {
-		char* selectedByte = y_pos == 0 ? &input_byte : &output_byte;
+		char* selectedByte = grid_bytes + y_pos;
 		
-		char buff[10] = {0};
-		printf("  "); for(size_t x = 0; x < 9; x++) {if(x==4)printf(" ");printf("%c", x == x_pos ? 'v' : ' ');}
-		binary_str_from_byte(input_byte, buff, true);
-		printf("\n%c %s\n", y_pos == 0 ? '>' : ' ', buff);
-		// binary_str_from_byte(output_byte, buff, true);
-		// printf("%c %s\n", y_pos == 1 ? '>' : ' ', buff);
+		dump_program_state(stdout, x_pos, y_pos, grid_bytes, sizeof(grid_bytes));
 
 		printf("\nExecuting: "); dump_token(stdout, current);
 
@@ -384,8 +404,35 @@ void Railcar_Simulator(Token* firstTk) {
 			
 			printf("At end got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
 		}
+		if (current->type == LOOP_UNTIL_BEGINNING) {
+			bool result = x_pos == -1;
+			if (result) nextTk = current->next_if_true;
+			else        nextTk = current->next_if_false;
+			
+			printf("At beginning got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
+		}
 		if (current->type == HEAD_LEFT) {x_pos--;}
 		if (current->type == HEAD_RIGHT) {x_pos++;}
+		if (current->type == HEAD_UP) {y_pos--;}
+		if (current->type == HEAD_DOWN) {y_pos++;}
+		if (current->type == REPEAT_MOVE) {
+			move_head(&x_pos, &y_pos, current->next_unconditional->type, current->value);
+			nextTk = current->next_unconditional->next_unconditional;
+		}
+		if (current->type == REPEAT_MOVE_MAX) {
+			if (current->next_unconditional->type == HEAD_LEFT) {
+				x_pos = 0;
+				nextTk = current->next_unconditional->next_unconditional;
+			}
+			else if (current->next_unconditional->type == HEAD_RIGHT) {
+				x_pos = 7;
+				nextTk = current->next_unconditional->next_unconditional;
+			}
+			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'", human(current->next_unconditional->id));
+
+		}
+
+
 		if (current->type == HEAD_WRITE) {
 			if (current->value) *selectedByte = write1ToByte(*selectedByte, x_pos);
 			else                *selectedByte = write0ToByte(*selectedByte, x_pos);
@@ -401,9 +448,7 @@ void Railcar_Simulator(Token* firstTk) {
 		if (flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
 	printf("No more tokens, Final state: \n");
-	char buff[10] = {0};
-	binary_str_from_byte(input_byte, buff, true);
-	printf("%s\n", buff);
+	dump_program_state(stdout, x_pos, y_pos, grid_bytes, sizeof(grid_bytes));
 }
 
 
