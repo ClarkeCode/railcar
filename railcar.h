@@ -70,7 +70,7 @@ typedef struct Token{
 	struct Token* next_if_true;
 	struct Token* next_if_false;
 
-	struct Token* prefix_token; //If there is a modifier token before it ie: repeat/max_repeat
+	BidirectionalLinkage* prefix_member; //Senior is the modifier token ie: repeat/max_repeat, Junior is the modified token ie: up/left
 	
 	struct Token* paired_token; //stake+return flag / open+close block
 

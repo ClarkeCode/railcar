@@ -220,7 +220,7 @@ void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
 void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	const bool showConditionals = false;
 	const bool showPairedTokens = true;
-	const bool showPrefixTokens = true;
+	const bool showPrefixedTokens = false;
 	fprintf(fp, "digraph {\n");
 	// fprintf(fp, "\tlayout=neato;\n");
 	Token* current;
@@ -228,6 +228,7 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 		current = tkArr+x;
 
 		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
+		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
 
 		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
 		if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
@@ -250,8 +251,8 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 		if (showPairedTokens && current->paired_token && current < current->paired_token) {
 			fprintf(fp, "%d -> %d [color=\"green\" dir=\"both\"]\n", current->id, current->paired_token->id);
 		}
-		if (showPrefixTokens && current->prefix_token) {
-			fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_token->id, current->id);
+		if (showPrefixedTokens && current->prefix_member && current == current->prefix_member->senior) {
+			fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_member->senior->id, current->prefix_member->junior->id);
 		}
 	}
 	fprintf(fp, "}\n");
@@ -319,7 +320,13 @@ TOKEN_TYPE pair_type_lookup(TOKEN_TYPE actual, TOKEN_TYPE* firsts, TOKEN_TYPE* s
 	}
 	return UNKNOWN;
 }
-void attach_self_as_prefix(Token* prefix, Token* modifiedTk) { modifiedTk->prefix_token = prefix; }
+void apply_prefix(Token* prefix, Token* modifiedTk) {
+	BidirectionalLinkage* relation = malloc(sizeof(BidirectionalLinkage));
+	relation->senior = prefix;
+	relation->junior = modifiedTk;
+	prefix->prefix_member = relation;
+	modifiedTk->prefix_member = relation;
+}
 void Railcar_Parser(Token* tokens, size_t numTokens) {
 	Token* stopper = tokens + numTokens;
 	Token* rstopper = tokens - 1;
@@ -357,11 +364,11 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 	for (Token* current = tokens + numTokens - 1; current != rstopper; current--) {
 		if (current->type == HEAD_READ) {
 			setup_conditional_branch(current, tokens, stopper);
-			attach_self_as_prefix(current, current+1);
+			apply_prefix(current, current+1);
 		}
 		if (current->type == CHECK_ABILITY_TO_MOVE) {
 			setup_conditional_branch(current, tokens, stopper);
-			attach_self_as_prefix(current, current+1);
+			apply_prefix(current, current+1);
 		}
 	}
 
@@ -386,19 +393,23 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 		HEAD_RIGHT,
 		HEAD_UP,
 		HEAD_DOWN,
-		REPEAT_MOVE,
-		REPEAT_MOVE_MAX,
 		OPEN_CONDITIONAL,
 		CLOSE_CONDITIONAL,
 		STAKE_FLAG
 	};
 	for (Token* current = tokens; current < stopper; current++) {
-		//TODO: WARNING - does not properly check validity of lookahead/behin
+		//TODO: WARNING - does not properly check validity of lookahead/behind
 		if (!current->next_unconditional && type_in(current->type, passthrough, sizeof(passthrough))) {
 			current->next_unconditional = next_nonconditional_token(current, stopper);
-			if (current->type == REPEAT_MOVE || current->type == REPEAT_MOVE_MAX) {
-				attach_self_as_prefix(current, current+1);
-			}
+		}
+	}
+
+	for (Token* current = tokens; current < stopper; current++) {
+		//TODO: WARNING - does not properly check validity of lookahead/behind
+
+		if (current->type == REPEAT_MOVE || current->type == REPEAT_MOVE_MAX) {
+			apply_prefix(current, current+1);
+			current->next_unconditional = current->prefix_member->junior->next_unconditional;
 		}
 
 		if (current->type == LOOP_UNTIL_END || current->type == LOOP_UNTIL_BEGINNING) {
