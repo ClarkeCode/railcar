@@ -8,6 +8,7 @@
 typedef struct {
 	bool step;
 	bool use_ansi;
+	bool no_colour;
 	bool graphviz;
 } Flags;
 Flags flags = {0};
@@ -110,18 +111,32 @@ char byte_from_binary_str(char* str, bool separateNibbles) {
 	return output;
 }
 
+const char ANSI_RESET_STYLE[] = "\x1b[0m";
+
 //TODO: try reworking to have an internal buffer and returning the buffer as a char*
-void binary_str_from_byte(char byte, char* str, bool separateNibbles) {
-	int writeLen = (separateNibbles) ? 8 : 7;
+//Note: pass NULL to ansiColourString to ignore colouring
+void binary_str_from_byte(char byte, char* str, bool separateNibbles, int colouredPosition, char* ansiColourStr) {
 	char* currentChar = str;
 	for (int x = 0; x < 8; x++) {
 		if (separateNibbles && x == 4)
 			(*currentChar++) = ' ';
 
+		if (ansiColourStr && x == colouredPosition) {
+			strcat(str, ansiColourStr);
+			currentChar += strlen(ansiColourStr);
+		}
+
 		if ((byte >> 7-x) & 0x1)
 			(*currentChar++) = '1';
 		else
 			(*currentChar++) = '0';
+
+		if (ansiColourStr && x == colouredPosition) {
+			const char* reset = ANSI_RESET_STYLE;
+			while (*reset != '\0') {
+				(*currentChar++) = *reset++;
+			}
+		}
 	}
 }
 
@@ -351,10 +366,12 @@ void dump_program_state(FILE* fp, int x_pos, int y_pos, char* grid_bytes, size_t
 	for(size_t x = 0; x < 9; x++) {if(x==4)fprintf(fp, " ");fprintf(fp, "%c", x == x_pos ? 'v' : ' ');}
 	fprintf(fp, "\n");
 
-	for (size_t x = 0; x < 3; x++) {
-		char buff[10] = {0};
-		binary_str_from_byte(*(grid_bytes+x), buff, true);
-		fprintf(fp, "%c %s\n", y_pos == x ? '>' : ' ', buff);
+	for (size_t y = 0; y < 3; y++) {
+		char buff[64] = {0};
+		binary_str_from_byte(*(grid_bytes+y), buff, true, x_pos,
+			(flags.use_ansi && !flags.no_colour && y == y_pos ? "\x1b[32m" : "")
+		);
+		fprintf(fp, "%c %s\n", y_pos == y ? '>' : ' ', buff);
 	}
 }
 
@@ -463,6 +480,7 @@ int main(int argc, char* argv[]) {
 	//TODO: better argv handling
 	if (strcmp(argv[1], "step") == 0) flags.step = true;
 	flags.use_ansi = true;
+	flags.no_colour = false;
 	flags.graphviz = true;
 	char* fileName = argv[flags.step ? 2 : 1];
 
