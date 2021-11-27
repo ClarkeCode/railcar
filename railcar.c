@@ -107,44 +107,17 @@ Token* Railcar_Lexer(char* fileName, size_t* tokenNum) {
 	return tokens;
 }
 
-char byte_from_binary_str(char* str, bool separateNibbles) {
-	char output = 0x0000;
-	for (size_t x = 0; x < (separateNibbles ? 9 : 8); x++) {
-		if (separateNibbles && x == 4) continue;
-		output <<= 1;
-		output |= (*(str+x) == '1' ? 0x0001 : 0x0000);
-	}
-	return output;
-}
 
-const char ANSI_RESET_STYLE[] = "\x1b[0m";
 
-//TODO: try reworking to have an internal buffer and returning the buffer as a char*
-//Note: pass NULL to ansiColourString to ignore colouring
-void binary_str_from_byte(char byte, char* str, bool separateNibbles, int colouredPosition, char* ansiColourStr) {
-	char* currentChar = str;
-	for (int x = 0; x < 8; x++) {
-		if (separateNibbles && x == 4)
-			(*currentChar++) = ' ';
 
-		if (ansiColourStr && x == colouredPosition) {
-			strcat(str, ansiColourStr);
-			currentChar += strlen(ansiColourStr);
-		}
 
-		if ((byte >> 7-x) & 0x1)
-			(*currentChar++) = '1';
-		else
-			(*currentChar++) = '0';
 
-		if (ansiColourStr && x == colouredPosition) {
-			const char* reset = ANSI_RESET_STYLE;
-			while (*reset != '\0') {
-				(*currentChar++) = *reset++;
-			}
-		}
-	}
-}
+
+
+
+
+
+
 
 char* human(TOKEN_TYPE ttype) {
 	assert(NUM_TOKEN_TYPE == 24 && "Unhandled Token");
@@ -192,79 +165,6 @@ bool type_in(TOKEN_TYPE t, TOKEN_TYPE* desiredTypes, size_t sz) {
 	}
 	return false;
 }
-
-
-//TODO: add sequence number to tokens to remove 'tkArr' argument
-void dump_token(FILE* fp, Token* tk) {
-	if (!tk) return;
-	bool lineInfo = false;
-	bool nextTk = true;
-	if (lineInfo) fprintf(fp, "%s:%lu:%lu ", tk->loc.file, tk->loc.line, tk->loc.character);
-	fprintf(fp, "TOKEN #%lu { %s",
-		tk->id, human(tk->type));
-	if (tk->type == HEAD_WRITE || tk->type == REPEAT_MOVE) 
-		fprintf(fp, " - '%d'", tk->value);
-	if (nextTk) {
-		if (tk->next_unconditional) fprintf(fp, " NU: %lu", tk->next_unconditional->id);
-		if (tk->next_if_false) fprintf(fp, " NF: %lu",tk->next_if_false->id);
-		if (tk->next_if_true) fprintf(fp, " NT: %lu",tk->next_if_true->id);
-	}
-	fprintf(fp, "}\n");
-}
-void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
-	for (size_t x = 0; x<num_tk; x++) {
-		dump_token(fp, tkArr+x);
-	}
-}
-
-void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
-	const bool showConditionals = false;
-	const bool showPairedTokens = true;
-	const bool showPrefixedTokens = false;
-	fprintf(fp, "digraph {\n");
-	// fprintf(fp, "\tlayout=neato;\n");
-	Token* current;
-	for (size_t x = 0; x<num_tk; x++) {
-		current = tkArr+x;
-
-		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
-		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
-
-		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
-		if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
-			fprintf(fp, " - %s", human((current+1)->type));
-		}
-
-		//Don't display the value of 0 except for the write operation
-		if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
-		fprintf(fp, "\"]\n");
-		if (current->next_unconditional)
-			fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
-		if (current->next_if_true)
-			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
-		if (current->next_if_false)
-			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
-		if (showConditionals && current->conditional) {
-			fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->end_true->id);
-			fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->end_false->id);
-		}
-		if (showPairedTokens && current->paired_token && current < current->paired_token) {
-			fprintf(fp, "%d -> %d [color=\"green\" dir=\"both\"]\n", current->id, current->paired_token->id);
-		}
-		if (showPrefixedTokens && current->prefix_member && current == current->prefix_member->senior) {
-			fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_member->senior->id, current->prefix_member->junior->id);
-		}
-	}
-	fprintf(fp, "}\n");
-}
-
-void usage(FILE* fp) {
-	fprintf(fp, "USAGE: ./railcar.exe <subcommand> filename\n");
-	fprintf(fp, "\nSUBCOMMANDS:\n");
-	fprintf(fp, "	step     //step through tokens one-at-a-time");
-}
-
-
 
 Token* _find_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement, bool skipBranches, bool testEquality) {
 	Token* test = current;
@@ -320,12 +220,17 @@ TOKEN_TYPE pair_type_lookup(TOKEN_TYPE actual, TOKEN_TYPE* firsts, TOKEN_TYPE* s
 	}
 	return UNKNOWN;
 }
-void apply_prefix(Token* prefix, Token* modifiedTk) {
+BidirectionalLinkage* make_blink(Token* senior, Token* junior) {
 	BidirectionalLinkage* relation = malloc(sizeof(BidirectionalLinkage));
-	relation->senior = prefix;
-	relation->junior = modifiedTk;
-	prefix->prefix_member = relation;
-	modifiedTk->prefix_member = relation;
+	relation->senior = senior;
+	relation->junior = junior;
+	return relation;
+}
+void apply_prefix(Token* prefix, Token* modifiedTk) {
+	prefix->prefix_member = modifiedTk->prefix_member = make_blink(prefix, modifiedTk);
+}
+void apply_pair(Token* opener, Token* closer) {
+	opener->pair = closer->pair = make_blink(opener, closer);
 }
 void Railcar_Parser(Token* tokens, size_t numTokens) {
 	Token* stopper = tokens + numTokens;
@@ -340,10 +245,12 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK, STAKE_FLAG};
 	TOKEN_TYPE pairedcloser[] = {CLOSE_BLOCK, RETURN_FLAG};
 
+	//Connect tokens that must be paired
 	{
 		Token* current = tokens; Token* last = stopper-1;
 		for (; current < last; current++) {
-			if (type_in(current->type, pairedcloser, sizeof(pairedcloser)) && !current->paired_token) {
+			//If an unpaired closer is reached, the program is malformed
+			if (type_in(current->type, pairedcloser, sizeof(pairedcloser)) && !current->pair) {
 				fprintf(stderr, "ERROR: unpaired closing token '%s' at %s:%lu:%lu",
 					human(current->type), current->loc.file, current->loc.line, current->loc.character);
 			}
@@ -353,8 +260,7 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 				if (!last || last <= current) {
 					fprintf(stderr, "ERROR: no pair found");
 				}
-				last->paired_token = current;
-				current->paired_token = last--;
+				apply_pair(current, last--);
 			}
 		}
 	}
@@ -417,14 +323,13 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 			current->next_if_true = find_next_token_of_type(current, stopper, CLOSE_BLOCK);
 		}
 		if (current->type == LOOP_FIXED_AMOUNT) {
-			if (!(current+1)->paired_token)
+			if (!(current+1)->pair)
 				fprintf(stderr, "ERROR: no pair to loop");
-			current->next_if_false = (current+1)->paired_token;
+			current->next_if_false = (current+1)->pair->senior;
 			current->next_if_true = current+1;
 		}
 
 		if (current->type == RETURN_FLAG) {
-			current->paired_token = rfind_next_token_of_type(current, rstopper, STAKE_FLAG);
 			current->next_unconditional = next_nonconditional_token(current, stopper);
 		}
 		if (current->type == GOTO_BLOCK_END) {
@@ -440,6 +345,58 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const char ANSI_RESET_STYLE[] = "\x1b[0m";
+
+//TODO: try reworking to have an internal buffer and returning the buffer as a char*
+//Note: pass NULL to ansiColourString to ignore colouring
+void binary_str_from_byte(char byte, char* str, bool separateNibbles, int colouredPosition, char* ansiColourStr) {
+	char* currentChar = str;
+	for (int x = 0; x < 8; x++) {
+		if (separateNibbles && x == 4)
+			(*currentChar++) = ' ';
+
+		if (ansiColourStr && x == colouredPosition) {
+			strcat(str, ansiColourStr);
+			currentChar += strlen(ansiColourStr);
+		}
+
+		if ((byte >> 7-x) & 0x1)
+			(*currentChar++) = '1';
+		else
+			(*currentChar++) = '0';
+
+		if (ansiColourStr && x == colouredPosition) {
+			const char* reset = ANSI_RESET_STYLE;
+			while (*reset != '\0') {
+				(*currentChar++) = *reset++;
+			}
+		}
+	}
+}
+
+char byte_from_binary_str(char* str, bool separateNibbles) {
+	char output = 0x0000;
+	for (size_t x = 0; x < (separateNibbles ? 9 : 8); x++) {
+		if (separateNibbles && x == 4) continue;
+		output <<= 1;
+		output |= (*(str+x) == '1' ? 0x0001 : 0x0000);
+	}
+	return output;
+}
 
 char write1ToByte(char byte, size_t position) {
 	if (position > 7) return byte;
@@ -479,6 +436,71 @@ void dump_program_state(FILE* fp, int x_pos, int y_pos, char* grid_bytes, size_t
 		);
 		fprintf(fp, "%c %s\n", y_pos == y ? '>' : ' ', buff);
 	}
+}
+
+
+//TODO: add sequence number to tokens to remove 'tkArr' argument
+void dump_token(FILE* fp, Token* tk) {
+	if (!tk) return;
+	bool lineInfo = false;
+	bool nextTk = true;
+	if (lineInfo) fprintf(fp, "%s:%lu:%lu ", tk->loc.file, tk->loc.line, tk->loc.character);
+	fprintf(fp, "TOKEN #%lu { %s",
+		tk->id, human(tk->type));
+	if (tk->type == HEAD_WRITE || tk->type == REPEAT_MOVE) 
+		fprintf(fp, " - '%d'", tk->value);
+	if (nextTk) {
+		if (tk->next_unconditional) fprintf(fp, " NU: %lu", tk->next_unconditional->id);
+		if (tk->next_if_false) fprintf(fp, " NF: %lu",tk->next_if_false->id);
+		if (tk->next_if_true) fprintf(fp, " NT: %lu",tk->next_if_true->id);
+	}
+	fprintf(fp, "}\n");
+}
+void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
+	for (size_t x = 0; x<num_tk; x++) {
+		dump_token(fp, tkArr+x);
+	}
+}
+
+void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
+	const bool showConditionals = false;
+	const bool showPairedTokens = false;
+	const bool showPrefixedTokens = false;
+	fprintf(fp, "digraph {\n");
+	// fprintf(fp, "\tlayout=neato;\n");
+	Token* current;
+	for (size_t x = 0; x<num_tk; x++) {
+		current = tkArr+x;
+
+		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
+		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
+
+		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
+		if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
+			fprintf(fp, " - %s", human((current+1)->type));
+		}
+
+		//Don't display the value of 0 except for the write operation
+		if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
+		fprintf(fp, "\"]\n");
+		if (current->next_unconditional)
+			fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
+		if (current->next_if_true)
+			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
+		if (current->next_if_false)
+			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
+		if (showConditionals && current->conditional) {
+			fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->end_true->id);
+			fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->end_false->id);
+		}
+		if (showPairedTokens && current->pair && current == current->pair->senior) {
+			fprintf(fp, "%d -> %d [color=\"green\" dir=\"both\"]\n", current->id, current->pair->junior->id);
+		}
+		if (showPrefixedTokens && current->prefix_member && current == current->prefix_member->senior) {
+			fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_member->senior->id, current->prefix_member->junior->id);
+		}
+	}
+	fprintf(fp, "}\n");
 }
 
 void Railcar_Simulator(Token* firstTk) {
@@ -575,10 +597,20 @@ void Railcar_Simulator(Token* firstTk) {
 }
 
 
+
+
+
+
 void shellEcho(char* command) {
 	fprintf(stdout, "Running: %s\n", command);
 	int retcode = system(command);
 	fprintf(stdout, "%s %s\n", retcode==EXIT_SUCCESS ? "Success:" : "Failure", command);
+}
+
+void usage(FILE* fp) {
+	fprintf(fp, "USAGE: ./railcar.exe <subcommand> filename\n");
+	fprintf(fp, "\nSUBCOMMANDS:\n");
+	fprintf(fp, "	step     //step through tokens one-at-a-time");
 }
 
 int main(int argc, char* argv[]) {

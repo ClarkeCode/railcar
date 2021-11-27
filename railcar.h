@@ -56,10 +56,11 @@ typedef struct ConditionalBranch{
 	struct Token* end_true;
 } ConditionalBranch;
 
-typedef struct {
+typedef struct BidirectionalLinkage{
 	struct Token* senior;
 	struct Token* junior;
 } BidirectionalLinkage;
+BidirectionalLinkage* make_blink(Token* senior, Token* junior);
 
 typedef struct Token{
 	int id;
@@ -72,7 +73,7 @@ typedef struct Token{
 
 	BidirectionalLinkage* prefix_member; //Senior is the modifier token ie: repeat/max_repeat, Junior is the modified token ie: up/left
 	
-	struct Token* paired_token; //stake+return flag / open+close block
+	BidirectionalLinkage* pair; //Senior is the opening token ie: '[', Junior is the closing token ie: ']'
 
 	ConditionalBranch* conditional; //Will be not NULL if this token creates a branch
 	ConditionalBranch* branchMember; //If the token belongs to a branch, this points to the info
