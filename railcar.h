@@ -60,7 +60,7 @@ typedef struct BidirectionalLinkage{
 	struct Token* senior;
 	struct Token* junior;
 } BidirectionalLinkage;
-BidirectionalLinkage* make_blink(Token* senior, Token* junior);
+BidirectionalLinkage* make_blink(struct Token* senior, struct Token* junior);
 
 typedef struct Token{
 	int id;
@@ -79,6 +79,6 @@ typedef struct Token{
 	ConditionalBranch* branchMember; //If the token belongs to a branch, this points to the info
 } Token;
 
-// int Railcar_Lexer(char* fileName, Token** tokenArr);
+Token* Railcar_Lexer(char* fileName, size_t* tokenNum);
 
 #endif

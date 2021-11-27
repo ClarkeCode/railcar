@@ -13,7 +13,7 @@
 				// "/Wall",//All warnings
 				"/Fe:",//Name executable
 				"${fileDirname}\\railcar.exe",//${fileBasenameNoExtension}.exe",
-				"railcar.c"//"${file}"
+				"*.c"//"${file}"
 			],
 			"problemMatcher": ["$msCompile"],
 			"group": {
