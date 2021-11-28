@@ -6,7 +6,9 @@
 #include "railcar.h"
 
 typedef struct {
+	bool help;
 	bool step;
+	bool step_interactive;
 	bool use_ansi;
 	bool no_colour;
 	bool graphviz;
@@ -324,19 +326,7 @@ void move_head(HeadLocation* location, TOKEN_TYPE t, size_t repeats) {
 	}
 }
 
-// void dump_stac(FILE* fp, int x_pos, int y_pos, char* grid_bytes, size_t grid_size) {
-	
-// 	for (size_t y = 0; y < 3; y++) {
-// 		char buff[64] = {0};
-// 		binary_str_from_byte(*(grid_bytes+y), buff, true, x_pos,
-// 			(flags.use_ansi && !flags.no_colour && y == y_pos ? "\x1b[32m" : "")
-// 		);
-// 		fprintf(fp, "%c %s\n", y_pos == y ? '>' : ' ', buff);
-// 	}
-// }
 
-
-//TODO: add sequence number to tokens to remove 'tkArr' argument
 void dump_token(FILE* fp, Token* tk) {
 	if (!tk) return;
 	bool lineInfo = false;
@@ -420,13 +410,6 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 }
 
 void Railcar_Simulator(Program* prog) {
-	//TODO: expand simulator to allow an arbitrary number of byte rows
-	// char grid_bytes[3] = {0};
-	// *(grid_bytes+0) = byte_from_binary_str("0101 1100", true);
-	// *(grid_bytes+1) = byte_from_binary_str("0011 0100", true);
-	// *(grid_bytes+2) = 0;
-	// int save_x = 0;
-	// int save_y = 0;
 
 	if (flags.use_ansi) { printf("\x1b[s***\n"); }//Save cursor position
 	Token* firstTk = prog->instructions;
@@ -516,15 +499,15 @@ void Railcar_Simulator(Program* prog) {
 		if (current->type == HEAD_UP) { move_head(&(prog->stack.current_location), HEAD_UP, 1); }
 		if (current->type == HEAD_DOWN) { move_head(&(prog->stack.current_location), HEAD_DOWN, 1); }
 		if (current->type == REPEAT_MOVE) {
-			move_head(&(prog->stack.current_location), current->next_unconditional->type, current->value);
-			nextTk = current->next_unconditional->next_unconditional;
+			move_head(&(prog->stack.current_location), (current+1)->type, current->value);
+			nextTk = current->next_unconditional;
 		}
 		if (current->type == REPEAT_MOVE_MAX) {
 			if (current->prefix_member->junior->type == HEAD_LEFT) { prog->stack.current_location.x = 0; }
 			else if (current->prefix_member->junior->type == HEAD_RIGHT) { prog->stack.current_location.x = prog->stack.max_dimensions.x-1; }
 			else if (current->prefix_member->junior->type == HEAD_UP) {prog->stack.current_location.y = 0; }
 			else if (current->prefix_member->junior->type == HEAD_DOWN) {prog->stack.current_location.y = prog->stack.max_dimensions.y-1; }
-			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'", human(current->next_unconditional->type));
+			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'\n", human(current->next_unconditional->type));
 			nextTk = current->prefix_member->junior->next_unconditional;
 		}
 
@@ -538,8 +521,10 @@ void Railcar_Simulator(Program* prog) {
 
 		// break;
 		current = nextTk;
-		char ch; scanf("%c", &ch);
-		if (ch == 'q') break;
+		if (flags.step_interactive) {
+			char ch; scanf("%c", &ch);
+			if (ch == 'q') break;
+		}
 		
 		if (flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
@@ -558,20 +543,42 @@ void shellEcho(char* command) {
 	fprintf(stdout, "%s %s\n", retcode==EXIT_SUCCESS ? "Success:" : "Failure", command);
 }
 
-void usage(FILE* fp) {
-	fprintf(fp, "USAGE: ./railcar.exe <subcommand> filename\n");
+void show_usage(FILE* fp) {
+	fprintf(fp, "USAGE: ./railcar.exe [options] <subcommand> filename\n");
 	fprintf(fp, "\nSUBCOMMANDS:\n");
-	fprintf(fp, "	step     //step through tokens one-at-a-time");
+	fprintf(fp, "	step           //step through tokens one-at-a-time");
+	fprintf(fp, "\nOPTIONS:\n");
+	fprintf(fp, "	--h, --help    //Display this help message\n");
+	fprintf(fp, "	--i            //interactive stepping\n");
+	fprintf(fp, "	--gv           //Generate Graphviz flow-control diagrams\n"); //TODO: may be subcommand
+	fprintf(fp, "	--no-colour    //turn off the pretty colours\n");
+	fprintf(fp, "	--no-ansi      //turn off all use of ANSI escape codes\n");
 }
 
 int main(int argc, char* argv[]) {
-	
-	//TODO: better argv handling
-	if (strcmp(argv[1], "step") == 0) flags.step = true;
+	argc--; argv++; //Discard own program name
+
+	char* fileName = NULL;
 	flags.use_ansi = true;
-	flags.no_colour = false;
-	flags.graphviz = true;
-	char* fileName = argv[flags.step ? 2 : 1];
+	while (argc != 0) {
+		char* item = *argv++; argc--;
+		if      (strcmp(item, "step") == 0) flags.step = true;
+		else if ((strcmp(item, "--h") == 0 || strcmp(item, "--help") == 0)) flags.help = true;
+		else if (strcmp(item, "--i") == 0) flags.step_interactive = true;
+		else if (strcmp(item, "--gv") == 0) flags.graphviz = true;
+		else if (strcmp(item, "--no-colour") == 0) flags.no_colour = true;
+		else if (strcmp(item, "--no-ansi") == 0) flags.use_ansi = false;
+
+		else {
+			fileName = item;
+		}
+	}
+	if (!fileName || flags.help) {
+		fprintf(stderr, "ERROR: No file provided\n");
+		show_usage(stderr);
+		exit(EXIT_FAILURE);
+	}
+	
 
 	//Lexer
 	printf("Lexing: %s\n", fileName);
