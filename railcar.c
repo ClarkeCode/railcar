@@ -7,6 +7,9 @@
 
 typedef struct {
 	bool help;
+	bool silent;
+	bool show_lex;
+	bool show_parse;
 	bool step;
 	bool step_interactive;
 	bool use_ansi;
@@ -14,6 +17,7 @@ typedef struct {
 	bool graphviz;
 } Flags;
 Flags flags = {0};
+Flags empty_flags = {0};
 
 
 
@@ -559,6 +563,9 @@ void show_usage(FILE* fp) {
 	fprintf(fp, "	step           //step through tokens one-at-a-time");
 	fprintf(fp, "\nOPTIONS:\n");
 	fprintf(fp, "	--h, --help    //Display this help message\n");
+	fprintf(fp, "	--s, --silent  //Do not display output messages\n");
+	fprintf(fp, "	--show-lex     //Show the lexing of the file\n");
+	fprintf(fp, "	--show-parse   //Show the parsing of the file\n");
 	fprintf(fp, "	--i            //interactive stepping\n");
 	fprintf(fp, "	--gv           //Generate Graphviz flow-control diagrams\n"); //TODO: may be subcommand
 	fprintf(fp, "	--no-colour    //turn off the pretty colours\n");
@@ -572,8 +579,11 @@ int main(int argc, char* argv[]) {
 	flags.use_ansi = true;
 	while (argc != 0) {
 		char* item = *argv++; argc--;
-		if      (strcmp(item, "step") == 0) flags.step = true;
+		if      (strcmp(item, "--show-lex") == 0) flags.show_lex = true;
+		else if (strcmp(item, "--show-parse") == 0) flags.show_parse = true;
+		else if (strcmp(item, "step") == 0) flags.step = true;
 		else if ((strcmp(item, "--h") == 0 || strcmp(item, "--help") == 0)) flags.help = true;
+		else if ((strcmp(item, "--s") == 0 || strcmp(item, "--silent") == 0)) flags.silent = true;
 		else if (strcmp(item, "--i") == 0) flags.step_interactive = true;
 		else if (strcmp(item, "--gv") == 0) flags.graphviz = true;
 		else if (strcmp(item, "--no-colour") == 0) flags.no_colour = true;
@@ -588,16 +598,17 @@ int main(int argc, char* argv[]) {
 		show_usage(stderr);
 		exit(EXIT_FAILURE);
 	}
+	if (flags.silent) { flags = empty_flags; }
 	
 
 	//Lexer
-	printf("Lexing: %s\n", fileName);
+	if (flags.show_lex) ("Lexing: %s\n", fileName);
 	Program* prog = Railcar_Lexer(fileName);
-	// dump_program(stdout, prog);
+	if (flags.show_lex) dump_program(stdout, prog);
 	
 	//Parser
 	Railcar_Parser(prog);
-	dump_program(stdout, prog);
+	if (flags.show_parse) dump_program(stdout, prog);
 
 	if (flags.graphviz) {
 		FILE* fp = fopen("output.dot", "w");
