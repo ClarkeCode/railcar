@@ -18,7 +18,7 @@ Flags flags = {0};
 
 
 char* human(TOKEN_TYPE ttype) {
-	assert(NUM_TOKEN_TYPE == 24 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 26 && "Unhandled Token");
 
 	switch (ttype) {
 		case NO_OPERATION: return "NOP"; break;
@@ -51,6 +51,8 @@ char* human(TOKEN_TYPE ttype) {
 		case STAKE_FLAG: return "STAKE_FLAG"; break;
 		case RETURN_FLAG: return "RETURN_FLAG"; break;
 
+		case PRINT_BYTE_AS_CHAR: return "PRINT_BYTE_AS_CHAR"; break;
+		case PRINT_BYTE_AS_NUM: return "PRINT_BYTE_AS_NUM"; break;
 		case END_OF_PROGRAM: return "END_OF_PROGRAM"; break;
 		case UNKNOWN: return "UNKNOWN"; break;
 	};
@@ -141,7 +143,7 @@ void Railcar_Parser(Program* prog) {
 	//TODO: add error reporting function and syntax checking to call
 
 	//TODO: lying here, need to handle all existing tokens
-	assert(NUM_TOKEN_TYPE == 24 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 26 && "Unhandled Token");
 
 	TOKEN_TYPE pairedtokens[] = {OPEN_BLOCK, CLOSE_BLOCK, STAKE_FLAG, RETURN_FLAG};
 	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK, STAKE_FLAG};
@@ -203,7 +205,9 @@ void Railcar_Parser(Program* prog) {
 		HEAD_DOWN,
 		OPEN_CONDITIONAL,
 		CLOSE_CONDITIONAL,
-		STAKE_FLAG
+		STAKE_FLAG,
+		PRINT_BYTE_AS_CHAR,
+		PRINT_BYTE_AS_NUM
 	};
 	for (Token* current = tokens; current < stopper; current++) {
 		//TODO: WARNING - does not properly check validity of lookahead/behind
@@ -411,7 +415,7 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 
 void Railcar_Simulator(Program* prog) {
 
-	if (flags.use_ansi) { printf("\x1b[s***\n"); }//Save cursor position
+	if (flags.step && flags.use_ansi) { printf("\x1b[s***\n"); }//Save cursor position
 	Token* firstTk = prog->instructions;
 	Token* current = NULL;
 	while (!current || current->next_unconditional || current->next_if_false || current->next_if_true) {
@@ -419,17 +423,20 @@ void Railcar_Simulator(Program* prog) {
 		int x_pos = prog->stack.current_location.x;
 		int y_pos = prog->stack.current_location.y;
 		
-		dump_datastack(stdout, &prog->stack);
+		if (flags.step) {
+			dump_datastack(stdout, &prog->stack);
+			printf("\nExecuting: "); dump_token(stdout, current);
+		}
 
-		printf("\nExecuting: "); dump_token(stdout, current);
-
-		assert(NUM_TOKEN_TYPE == 24 && "Unhandled token");
+		assert(NUM_TOKEN_TYPE == 26 && "Unhandled token");
 
 		Token* nextTk = NULL;
 		if (!current) {
 			nextTk = firstTk;
-			printf("\nNext TK: "); dump_token(stdout, nextTk);
-			printf("-----------\n");
+			if (flags.step) {
+				printf("\nNext TK: "); dump_token(stdout, nextTk);
+				printf("-----------\n");
+			}
 			current = nextTk;
 			continue;
 		}
@@ -446,7 +453,7 @@ void Railcar_Simulator(Program* prog) {
 		}
 		else if (current->next_unconditional) {
 			nextTk = current->next_unconditional;
-			printf("Next TK: "); dump_token(stdout, nextTk);
+			if (flags.step) { printf("Next TK: "); dump_token(stdout, nextTk); }
 		}
 		
 		if (current->type == HEAD_READ) {
@@ -454,7 +461,7 @@ void Railcar_Simulator(Program* prog) {
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			printf("Read head got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
+			if (flags.step) { printf("Read head got '%d'\nNext TK: ", result); dump_token(stdout, nextTk); }
 		}
 		if (current->type == CHECK_ABILITY_TO_MOVE) {
 			bool can_move = false;
@@ -475,24 +482,25 @@ void Railcar_Simulator(Program* prog) {
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			printf("At end got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
+			if (flags.step) {printf("At end got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);}
 		}
 		if (current->type == LOOP_UNTIL_BEGINNING) {
 			bool result = x_pos == -1;
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			printf("At beginning got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
+			if (flags.step) {printf("At beginning got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);}
 		}
 		if (current->type == LOOP_FIXED_AMOUNT) {
 			bool result = (current->value--) == 0;
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
-			printf("Loop fixed has '%d' remaining\nNext TK: ", current->value); dump_token(stdout, nextTk);
+			if (flags.step) {printf("Loop fixed has '%d' remaining\nNext TK: ", current->value); dump_token(stdout, nextTk);}
 		}
 
-		//flag stake/return
-		//goto block start/end
+		
+		if (current->type == PRINT_BYTE_AS_CHAR) { printf("%c", *selectedByte); }
+		if (current->type == PRINT_BYTE_AS_NUM) { printf("%d", *selectedByte); }
 
 		if (current->type == HEAD_LEFT) { move_head(&(prog->stack.current_location), HEAD_LEFT, 1); }
 		if (current->type == HEAD_RIGHT) { move_head(&(prog->stack.current_location), HEAD_RIGHT, 1); }
@@ -517,19 +525,21 @@ void Railcar_Simulator(Program* prog) {
 			else                *selectedByte = write0ToByte(*selectedByte, x_pos);
 		}
 		
-		printf("-----------\n");
+		if (flags.step) printf("-----------\n");
 
 		// break;
 		current = nextTk;
-		if (flags.step_interactive) {
+		if (flags.step && flags.step_interactive) {
 			char ch; scanf("%c", &ch);
 			if (ch == 'q') break;
 		}
 		
-		if (flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
+		if (flags.step && flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
-	printf("No more tokens, Final state: \n");
-	dump_datastack(stdout, &prog->stack);
+	if (flags.step) {
+		printf("No more tokens, Final state: \n");
+		dump_datastack(stdout, &prog->stack);
+	}
 }
 
 
@@ -602,9 +612,8 @@ int main(int argc, char* argv[]) {
 	if (flags.step) {
 		printf("Stepper\n");
 		// if (flags.use_ansi) { printf("\x1b[s***"); }//Save cursor position
-
-		Railcar_Simulator(prog);
 	}
+	Railcar_Simulator(prog);
 
 	if (false) {
 		//TODO: work on use of ANSI escapes

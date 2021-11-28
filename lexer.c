@@ -88,7 +88,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 	//Get instructions
 	while ((c = procureNextChar(lexf, &num_lines, &num_chars)) != EOF) {
-		assert(NUM_TOKEN_TYPE == 24 && "Unhandled Token");
+		assert(NUM_TOKEN_TYPE == 26 && "Unhandled Token");
 		Token* tk = tokens+num_tokens;
 		tk->loc.file = fileName;
 		tk->loc.line = num_lines;
@@ -133,6 +133,8 @@ Program* Railcar_Lexer(char* fileName) {
 			case '!': create_token(&num_tokens, tk, REPEAT_MOVE_MAX, 0);       break;
 			case '&': create_token(&num_tokens, tk, STAKE_FLAG, 0);            break;
 			case '@': create_token(&num_tokens, tk, RETURN_FLAG, 0);           break;
+			case 'c': create_token(&num_tokens, tk, PRINT_BYTE_AS_CHAR, 0);    break;
+			case 'd': create_token(&num_tokens, tk, PRINT_BYTE_AS_NUM, 0);     break;
 
 			default:  create_token(&num_tokens, tk, UNKNOWN, 0);
 		}
