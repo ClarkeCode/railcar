@@ -3,7 +3,23 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include "railcar.h"
+
+//Note: prefix is optional, pass NULL to ignore
+void reportError(Location* errorLoc, const char* prefix, const char* fmessage, ...) {
+	fprintf(stderr, "%s:%lu:%lu ", errorLoc->file, errorLoc->line, errorLoc->character);
+	if (prefix) fprintf(stderr, "[%s] ", prefix);
+	fprintf(stderr, "ERROR: ");
+
+
+	va_list args;
+	va_start (args, fmessage);
+	vfprintf (stderr, fmessage, args);
+	va_end (args);
+
+	exit(EXIT_FAILURE);
+}
 
 //Pass NULL as an argument to num_tokens if you do not want it to be incremented
 //Pass 0 as an argument to val if the token does not requre a value
@@ -17,19 +33,21 @@ void create_token(size_t* num_tokens, Token* tk, TOKEN_TYPE tk_t, int val) {
 		(*num_tokens)++;
 }
 
-char procureNextChar(FILE* fp, size_t* line_tracker, size_t* char_tracker) {
+char procureNextChar(FILE* fp, Location* parse_location) {
 	char c = fgetc(fp);
-	(*char_tracker)++;
-	if (c == '\n') {
-		(*line_tracker)++;
-		(*char_tracker) = -1;
+	if (parse_location) {
+		if (c == '\n') {
+			parse_location->line++;
+			parse_location->character = -1;
+		}
+		parse_location->character++;
 	}
 	return c;
 }
-char consumeRemainderOfLine(FILE* fp, size_t* line_tracker, size_t* char_tracker) {
+char consumeRemainderOfLine(FILE* fp, Location* parse_location) {
 	char c;
 	do {
-		c = procureNextChar(fp, line_tracker, char_tracker);
+		c = procureNextChar(fp, parse_location);
 		if (c=='\n') break;
 	} while (c != EOF);
 	return c;
@@ -39,6 +57,8 @@ char fpeek(FILE* stream) {
 	ungetc(temp, stream);
 	return temp;
 }
+
+const char* _prefix_lex = "LEXER";
 Program* Railcar_Lexer(char* fileName) {
 	FILE* lexf = fopen(fileName, "r");
 	if (!lexf) return NULL;
@@ -47,33 +67,31 @@ Program* Railcar_Lexer(char* fileName) {
 	//TODO: arbitrary instruction length
 	Token* tokens = calloc(128, sizeof(Token));
 	size_t num_tokens = 0;
-	size_t num_lines = 0;
-	size_t num_chars = -1;
+
+	Location parse_location = {.file = fileName, .line = 0, .character = -1};
 
 	char c;
 
 	//Set initial state of the data stack
 	char buff[128] = {0};
-	while ((c = procureNextChar(lexf, &num_lines, &num_chars)) != EOF) {
+	while ((c = procureNextChar(lexf, &parse_location)) != EOF) {
 		if (c == '/') {
-			consumeRemainderOfLine(lexf, &num_lines, &num_chars);
+			consumeRemainderOfLine(lexf, &parse_location);
 			if (c == EOF) break;
 		}
 		if (c == 'o') {
 			do {
-				c = procureNextChar(lexf, &num_lines, &num_chars);
+				c = procureNextChar(lexf, &parse_location);
+				if (c == EOF) reportError(&parse_location, _prefix_lex, "Malformed railcar - expected 'o', got END-OF-FILE\n");
 				if (c != '=' && c != 'o') {
-					fprintf(stderr, "ERROR: Malformed railcar\n"); exit(EXIT_FAILURE);
+					reportError(&parse_location, _prefix_lex, "Malformed railcar - expected 'o', got '%c'\n", c);
 				}
 			} while (c != 'o' && c != EOF);
-			if (c != 'o') {
-				fprintf(stderr, "ERROR: Malformed railcar - expected 'o', got '%c'\n", c); exit(EXIT_FAILURE);
-			}
 			break;
 		}
 		if (isdigit(c)) {
 			buff[0] = c;
-			while ((c = procureNextChar(lexf, &num_lines, &num_chars)) != EOF && isdigit(c)) {
+			while ((c = procureNextChar(lexf, &parse_location)) != EOF && isdigit(c)) {
 				buff[strlen(buff)] = c;
 			}
 			create_token(&(program->stack.sz_content), program->stack.content+program->stack.sz_content, NUMBER, atoi(buff));
@@ -85,16 +103,14 @@ Program* Railcar_Lexer(char* fileName) {
 
 
 	//Get instructions
-	while ((c = procureNextChar(lexf, &num_lines, &num_chars)) != EOF) {
+	while ((c = procureNextChar(lexf, &parse_location)) != EOF) {
 		assert(NUM_TOKEN_TYPE == 26 && "Unhandled Token");
 		Token* tk = tokens+num_tokens;
-		tk->loc.file = fileName;
-		tk->loc.line = num_lines;
-		tk->loc.character = num_chars;
+		tk->loc = parse_location;
 
 		//Comment
 		if (c == '/') {
-			consumeRemainderOfLine(lexf, &num_lines, &num_chars);
+			consumeRemainderOfLine(lexf, &parse_location);
 			if (c == EOF) break;
 			continue;
 		}
@@ -115,7 +131,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 			case 'r': create_token(&num_tokens, tk, HEAD_READ, 0);             break;
 			case 'w':
-				if ((c = procureNextChar(lexf, &num_lines, &num_chars)) == EOF) return NULL;
+				if ((c = procureNextChar(lexf, &parse_location)) == EOF) return NULL;
 				if (!(c == '0' || c == '1')) return NULL;
 				create_token(&num_tokens, tk, HEAD_WRITE, c == '0' ? 0 : 1);
 				break;
@@ -145,8 +161,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 	for (Token* test = tokens; test-tokens < num_tokens; test++) {
 		if (test->type == UNKNOWN) {
-			fprintf(stderr, "ERROR: unable to determine token, introduced at %s:%lu:%lu\n", test->loc.file, test->loc.line, test->loc.character);
-			exit(EXIT_FAILURE);
+			reportError(&test->loc, _prefix_lex, "Unable to determine token");
 		}
 	}
 
