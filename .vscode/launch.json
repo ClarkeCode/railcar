@@ -9,7 +9,7 @@
 		"type": "cppvsdbg",
 		"request": "launch",
 		"program": "${fileDirname}\\${fileBasenameNoExtension}.exe",
-		"args": [//"step", 
+		"args": ["step", 
 			"examples\\binaryadd.rc"],
 		"stopAtEntry": false,
 		"cwd": "${workspaceFolder}",

@@ -408,6 +408,8 @@ void Railcar_Simulator(Token* firstTk) {
 
 	int x_pos = 0;
 	int y_pos = 0;
+	int save_x = 0;
+	int save_y = 0;
 
 	if (flags.use_ansi) { printf("\x1b[s***\n"); }//Save cursor position
 	Token* current = NULL;
@@ -418,6 +420,8 @@ void Railcar_Simulator(Token* firstTk) {
 
 		printf("\nExecuting: "); dump_token(stdout, current);
 
+		assert(NUM_TOKEN_TYPE == 24 && "Unhandled token");
+
 		Token* nextTk = NULL;
 		if (!current) {
 			nextTk = firstTk;
@@ -425,6 +429,19 @@ void Railcar_Simulator(Token* firstTk) {
 			printf("-----------\n");
 			current = nextTk;
 			continue;
+		}
+		else if (current->type == OPEN_BLOCK || current->type == CLOSE_BLOCK) {
+			current = current->next_unconditional; continue;
+		}
+		else if (current->type == STAKE_FLAG) {
+			save_x = x_pos;
+			save_y = y_pos;
+			nextTk = current->next_unconditional;
+		}
+		else if (current->type == RETURN_FLAG) {
+			x_pos = save_x;
+			y_pos = save_y;
+			nextTk = current->next_unconditional;
 		}
 		else if (current->next_unconditional) {
 			nextTk = current->next_unconditional;
@@ -438,6 +455,20 @@ void Railcar_Simulator(Token* firstTk) {
 			
 			printf("Read head got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
 		}
+		if (current->type == CHECK_ABILITY_TO_MOVE) {
+			bool can_move = false;
+			TOKEN_TYPE direction = current->prefix_member->junior->type;
+			if (direction == HEAD_UP || direction == HEAD_DOWN) {
+				can_move = (direction == HEAD_UP ? y_pos > 0 : y_pos < sizeof(grid_bytes)-1);
+			}
+			else if (direction == HEAD_LEFT || direction == HEAD_RIGHT) {
+				can_move = (direction == HEAD_LEFT ? x_pos > 0 : x_pos < 7);
+			}
+
+			if (can_move) nextTk = current->next_if_true;
+			else          nextTk = current->next_if_false;
+		}
+
 		if (current->type == LOOP_UNTIL_END) {
 			bool result = x_pos == 8;
 			if (result) nextTk = current->next_if_true;
@@ -452,6 +483,16 @@ void Railcar_Simulator(Token* firstTk) {
 			
 			printf("At beginning got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);
 		}
+		if (current->type == LOOP_FIXED_AMOUNT) {
+			bool result = (current->value--) == 0;
+			if (result) nextTk = current->next_if_true;
+			else        nextTk = current->next_if_false;
+			printf("Loop fixed has '%d' remaining\nNext TK: ", current->value); dump_token(stdout, nextTk);
+		}
+
+		//flag stake/return
+		//goto block start/end
+
 		if (current->type == HEAD_LEFT) {x_pos--;}
 		if (current->type == HEAD_RIGHT) {x_pos++;}
 		if (current->type == HEAD_UP) {y_pos--;}
@@ -461,16 +502,12 @@ void Railcar_Simulator(Token* firstTk) {
 			nextTk = current->next_unconditional->next_unconditional;
 		}
 		if (current->type == REPEAT_MOVE_MAX) {
-			if (current->next_unconditional->type == HEAD_LEFT) {
-				x_pos = 0;
-				nextTk = current->next_unconditional->next_unconditional;
-			}
-			else if (current->next_unconditional->type == HEAD_RIGHT) {
-				x_pos = 7;
-				nextTk = current->next_unconditional->next_unconditional;
-			}
-			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'", human(current->next_unconditional->id));
-
+			if (current->prefix_member->junior->type == HEAD_LEFT) { x_pos = 0; }
+			else if (current->prefix_member->junior->type == HEAD_RIGHT) { x_pos = 7; }
+			else if (current->prefix_member->junior->type == HEAD_UP) {y_pos = 0; }
+			else if (current->prefix_member->junior->type == HEAD_DOWN) {y_pos = sizeof(grid_bytes)-1; }
+			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'", human(current->next_unconditional->type));
+			nextTk = current->prefix_member->junior->next_unconditional;
 		}
 
 
