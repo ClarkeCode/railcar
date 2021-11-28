@@ -79,6 +79,23 @@ typedef struct Token{
 	ConditionalBranch* branchMember; //If the token belongs to a branch, this points to the info
 } Token;
 
-Token* Railcar_Lexer(char* fileName, size_t* tokenNum);
+typedef struct {
+	size_t x, y;
+} HeadLocation;
+typedef struct {
+	HeadLocation current_location;
+	HeadLocation saved_location;
+	HeadLocation max_dimensions;
+	Token content[128]; //TODO: dynamic size data stack
+	size_t sz_content;
+} DataStack;
+
+typedef struct Program{
+	DataStack stack;
+	Token* instructions;
+	size_t sz_instructions;
+} Program;
+
+Program* Railcar_Lexer(char* fileName);
 
 #endif

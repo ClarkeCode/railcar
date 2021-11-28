@@ -57,7 +57,8 @@ char* human(TOKEN_TYPE ttype) {
 
 bool type_in(TOKEN_TYPE t, TOKEN_TYPE* desiredTypes, size_t sz) {
 	for (size_t x = 0; x < sz; x++) {
-		if (*(desiredTypes+x) == t) return true;
+		if (*(desiredTypes+x) == t)
+			return true;
 	}
 	return false;
 }
@@ -128,7 +129,10 @@ void apply_prefix(Token* prefix, Token* modifiedTk) {
 void apply_pair(Token* opener, Token* closer) {
 	opener->pair = closer->pair = make_blink(opener, closer);
 }
-void Railcar_Parser(Token* tokens, size_t numTokens) {
+#define _SIZE(arr) sizeof(arr)/sizeof(arr[0])
+void Railcar_Parser(Program* prog) {
+	Token* tokens = prog->instructions;
+	size_t numTokens = prog->sz_instructions;
 	Token* stopper = tokens + numTokens;
 	Token* rstopper = tokens - 1;
 
@@ -146,15 +150,15 @@ void Railcar_Parser(Token* tokens, size_t numTokens) {
 		Token* current = tokens; Token* last = stopper-1;
 		for (; current < last; current++) {
 			//If an unpaired closer is reached, the program is malformed
-			if (type_in(current->type, pairedcloser, sizeof(pairedcloser)) && !current->pair) {
+			if (type_in(current->type, pairedcloser, _SIZE(pairedcloser)) && !current->pair) {
 				fprintf(stderr, "ERROR: unpaired closing token '%s' at %s:%lu:%lu",
-					human(current->type), current->loc.file, current->loc.line, current->loc.character);
+					human(current->type), current->loc.file, current->loc.line, current->loc.character); exit(EXIT_FAILURE);
 			}
-			if (type_in(current->type, pairedopener, sizeof(pairedopener))) {
+			if (type_in(current->type, pairedopener, _SIZE(pairedopener))) {
 				last = rfind_next_token_of_type(last, rstopper,
 					pair_type_lookup(current->type, pairedopener, pairedcloser, sizeof(pairedopener)));
 				if (!last || last <= current) {
-					fprintf(stderr, "ERROR: no pair found");
+					fprintf(stderr, "ERROR: no pair found"); exit(EXIT_FAILURE);
 				}
 				apply_pair(current, last--);
 			}
@@ -309,30 +313,27 @@ char readByteAtPosition(char byte, size_t position) {
 	return (byte >> (7-position)) & 0x1;
 }
 
-void move_head(int* x_pos, int* y_pos, TOKEN_TYPE t, size_t repeats) {
+void move_head(HeadLocation* location, TOKEN_TYPE t, size_t repeats) {
 	for (size_t i = 0; i < repeats; i++) {
 		switch (t) {
-			case HEAD_LEFT:  (*x_pos)--; break;
-			case HEAD_RIGHT: (*x_pos)++; break;
-			case HEAD_UP:    (*y_pos)--; break;
-			case HEAD_DOWN:  (*y_pos)++; break;
+			case HEAD_LEFT:  (location->x)--; break;
+			case HEAD_RIGHT: (location->x)++; break;
+			case HEAD_UP:    (location->y)--; break;
+			case HEAD_DOWN:  (location->y)++; break;
 		}
 	}
 }
 
-void dump_program_state(FILE* fp, int x_pos, int y_pos, char* grid_bytes, size_t grid_size) {
-	fprintf(fp, " %c", x_pos == -1 ? 'v' : ' '); 
-	for(size_t x = 0; x < 9; x++) {if(x==4)fprintf(fp, " ");fprintf(fp, "%c", x == x_pos ? 'v' : ' ');}
-	fprintf(fp, "\n");
-
-	for (size_t y = 0; y < 3; y++) {
-		char buff[64] = {0};
-		binary_str_from_byte(*(grid_bytes+y), buff, true, x_pos,
-			(flags.use_ansi && !flags.no_colour && y == y_pos ? "\x1b[32m" : "")
-		);
-		fprintf(fp, "%c %s\n", y_pos == y ? '>' : ' ', buff);
-	}
-}
+// void dump_stac(FILE* fp, int x_pos, int y_pos, char* grid_bytes, size_t grid_size) {
+	
+// 	for (size_t y = 0; y < 3; y++) {
+// 		char buff[64] = {0};
+// 		binary_str_from_byte(*(grid_bytes+y), buff, true, x_pos,
+// 			(flags.use_ansi && !flags.no_colour && y == y_pos ? "\x1b[32m" : "")
+// 		);
+// 		fprintf(fp, "%c %s\n", y_pos == y ? '>' : ' ', buff);
+// 	}
+// }
 
 
 //TODO: add sequence number to tokens to remove 'tkArr' argument
@@ -356,6 +357,25 @@ void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
 	for (size_t x = 0; x<num_tk; x++) {
 		dump_token(fp, tkArr+x);
 	}
+}
+void dump_datastack(FILE* fp, DataStack* ds) {
+	fprintf(fp, " %c", ds->current_location.x == -1 ? 'v' : ' '); 
+	for(size_t x = 0; x < 9; x++) {if(x==4)fprintf(fp, " ");fprintf(fp, "%c", x == ds->current_location.x ? 'v' : ' ');}
+	fprintf(fp, "\n");
+
+	for (size_t y = 0; y < ds->max_dimensions.y; y++) {
+		char buff[64] = {0};
+		binary_str_from_byte((char)((ds->content+y)->value), buff, true, ds->current_location.x,
+			(flags.use_ansi && !flags.no_colour && y == ds->current_location.y ? "\x1b[32m" : "")
+		);
+		fprintf(fp, "%c %s\n", ds->current_location.y == y ? '>' : ' ', buff);
+	}
+}
+void dump_program(FILE* fp, Program* prog) {
+	fprintf(fp, "Datastack:\n");
+	dump_datastack(fp, &(prog->stack));
+	fprintf(fp, "\nInstructions:\n");
+	dump_tokens(fp, prog->instructions, prog->sz_instructions);
 }
 
 void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
@@ -399,24 +419,24 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	fprintf(fp, "}\n");
 }
 
-void Railcar_Simulator(Token* firstTk) {
+void Railcar_Simulator(Program* prog) {
 	//TODO: expand simulator to allow an arbitrary number of byte rows
-	char grid_bytes[3] = {0};
-	*(grid_bytes+0) = byte_from_binary_str("0101 1100", true);
-	*(grid_bytes+1) = byte_from_binary_str("0011 0100", true);
-	*(grid_bytes+2) = 0;
-
-	int x_pos = 0;
-	int y_pos = 0;
-	int save_x = 0;
-	int save_y = 0;
+	// char grid_bytes[3] = {0};
+	// *(grid_bytes+0) = byte_from_binary_str("0101 1100", true);
+	// *(grid_bytes+1) = byte_from_binary_str("0011 0100", true);
+	// *(grid_bytes+2) = 0;
+	// int save_x = 0;
+	// int save_y = 0;
 
 	if (flags.use_ansi) { printf("\x1b[s***\n"); }//Save cursor position
+	Token* firstTk = prog->instructions;
 	Token* current = NULL;
 	while (!current || current->next_unconditional || current->next_if_false || current->next_if_true) {
-		char* selectedByte = grid_bytes + y_pos;
+		char* selectedByte = &((char)prog->stack.content[prog->stack.current_location.y].value);
+		int x_pos = prog->stack.current_location.x;
+		int y_pos = prog->stack.current_location.y;
 		
-		dump_program_state(stdout, x_pos, y_pos, grid_bytes, sizeof(grid_bytes));
+		dump_datastack(stdout, &prog->stack);
 
 		printf("\nExecuting: "); dump_token(stdout, current);
 
@@ -434,13 +454,11 @@ void Railcar_Simulator(Token* firstTk) {
 			current = current->next_unconditional; continue;
 		}
 		else if (current->type == STAKE_FLAG) {
-			save_x = x_pos;
-			save_y = y_pos;
+			prog->stack.saved_location = prog->stack.current_location;
 			nextTk = current->next_unconditional;
 		}
 		else if (current->type == RETURN_FLAG) {
-			x_pos = save_x;
-			y_pos = save_y;
+			prog->stack.current_location = prog->stack.saved_location;
 			nextTk = current->next_unconditional;
 		}
 		else if (current->next_unconditional) {
@@ -459,7 +477,7 @@ void Railcar_Simulator(Token* firstTk) {
 			bool can_move = false;
 			TOKEN_TYPE direction = current->prefix_member->junior->type;
 			if (direction == HEAD_UP || direction == HEAD_DOWN) {
-				can_move = (direction == HEAD_UP ? y_pos > 0 : y_pos < sizeof(grid_bytes)-1);
+				can_move = (direction == HEAD_UP ? y_pos > 0 : y_pos < prog->stack.max_dimensions.y-1);
 			}
 			else if (direction == HEAD_LEFT || direction == HEAD_RIGHT) {
 				can_move = (direction == HEAD_LEFT ? x_pos > 0 : x_pos < 7);
@@ -493,19 +511,19 @@ void Railcar_Simulator(Token* firstTk) {
 		//flag stake/return
 		//goto block start/end
 
-		if (current->type == HEAD_LEFT) {x_pos--;}
-		if (current->type == HEAD_RIGHT) {x_pos++;}
-		if (current->type == HEAD_UP) {y_pos--;}
-		if (current->type == HEAD_DOWN) {y_pos++;}
+		if (current->type == HEAD_LEFT) { move_head(&(prog->stack.current_location), HEAD_LEFT, 1); }
+		if (current->type == HEAD_RIGHT) { move_head(&(prog->stack.current_location), HEAD_RIGHT, 1); }
+		if (current->type == HEAD_UP) { move_head(&(prog->stack.current_location), HEAD_UP, 1); }
+		if (current->type == HEAD_DOWN) { move_head(&(prog->stack.current_location), HEAD_DOWN, 1); }
 		if (current->type == REPEAT_MOVE) {
-			move_head(&x_pos, &y_pos, current->next_unconditional->type, current->value);
+			move_head(&(prog->stack.current_location), current->next_unconditional->type, current->value);
 			nextTk = current->next_unconditional->next_unconditional;
 		}
 		if (current->type == REPEAT_MOVE_MAX) {
-			if (current->prefix_member->junior->type == HEAD_LEFT) { x_pos = 0; }
-			else if (current->prefix_member->junior->type == HEAD_RIGHT) { x_pos = 7; }
-			else if (current->prefix_member->junior->type == HEAD_UP) {y_pos = 0; }
-			else if (current->prefix_member->junior->type == HEAD_DOWN) {y_pos = sizeof(grid_bytes)-1; }
+			if (current->prefix_member->junior->type == HEAD_LEFT) { prog->stack.current_location.x = 0; }
+			else if (current->prefix_member->junior->type == HEAD_RIGHT) { prog->stack.current_location.x = prog->stack.max_dimensions.x-1; }
+			else if (current->prefix_member->junior->type == HEAD_UP) {prog->stack.current_location.y = 0; }
+			else if (current->prefix_member->junior->type == HEAD_DOWN) {prog->stack.current_location.y = prog->stack.max_dimensions.y-1; }
 			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'", human(current->next_unconditional->type));
 			nextTk = current->prefix_member->junior->next_unconditional;
 		}
@@ -526,7 +544,7 @@ void Railcar_Simulator(Token* firstTk) {
 		if (flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
 	printf("No more tokens, Final state: \n");
-	dump_program_state(stdout, x_pos, y_pos, grid_bytes, sizeof(grid_bytes));
+	dump_datastack(stdout, &prog->stack);
 }
 
 
@@ -557,16 +575,16 @@ int main(int argc, char* argv[]) {
 
 	//Lexer
 	printf("Lexing: %s\n", fileName);
-	size_t num_tk = 0;
-	Token* tkArr = Railcar_Lexer(fileName, &num_tk);
+	Program* prog = Railcar_Lexer(fileName);
+	// dump_program(stdout, prog);
 	
 	//Parser
-	Railcar_Parser(tkArr, num_tk);
-	dump_tokens(stdout, tkArr, num_tk);
+	Railcar_Parser(prog);
+	dump_program(stdout, prog);
 
 	if (flags.graphviz) {
 		FILE* fp = fopen("output.dot", "w");
-		if (fp) dump_tokens_to_dotfile(fp, tkArr, num_tk);
+		if (fp) dump_tokens_to_dotfile(fp, prog->instructions, prog->sz_instructions);
 		fclose(fp);
 
 		shellEcho(".\\vendors\\Graphviz\\bin\\dot.exe -Tpng output.dot -O");
@@ -578,7 +596,7 @@ int main(int argc, char* argv[]) {
 		printf("Stepper\n");
 		// if (flags.use_ansi) { printf("\x1b[s***"); }//Save cursor position
 
-		Railcar_Simulator(tkArr);
+		Railcar_Simulator(prog);
 	}
 
 	if (false) {
@@ -599,5 +617,5 @@ int main(int argc, char* argv[]) {
 		// Reset colors to defaults
 		printf("\x1b[0mtesting\n");
 	}
-	return 0;
+	return EXIT_SUCCESS;
 }
