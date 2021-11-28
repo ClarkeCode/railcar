@@ -9,8 +9,8 @@
 //  1111 0000
 
 
-  92
-  52
+  13
+  17
   0
 o====o
 
@@ -37,3 +37,8 @@ r
 	)
 	!^
 6]
+
+2vd
+
+//1^ fill a byte with 1's and insert it above selected byte in datastack
+//0v fill a byte with 0's and insert it below selected byte in datastack
