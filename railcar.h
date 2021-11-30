@@ -105,4 +105,5 @@ typedef struct Program{
 
 Program* Railcar_Lexer(char* fileName);
 
+void Railcar_Parser(Program* prog);
 #endif
