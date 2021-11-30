@@ -1,6 +1,7 @@
 #ifndef RAILCAR_HEADER
 #define RAILCAR_HEADER
 #include <stdlib.h>
+#include <stdbool.h>
 
 typedef enum {
 	NO_OPERATION,
@@ -106,4 +107,19 @@ typedef struct Program{
 Program* Railcar_Lexer(char* fileName);
 
 void Railcar_Parser(Program* prog);
+
+void Railcar_Simulator(Program* prog);
+
+
+typedef struct {
+	bool help;
+	bool silent;
+	bool show_lex;
+	bool show_parse;
+	bool step;
+	bool step_interactive;
+	bool use_ansi;
+	bool no_colour;
+	bool graphviz;
+} Flags;
 #endif
