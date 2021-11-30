@@ -3,9 +3,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <stdarg.h>
 #include "railcar.h"
 
+
+#include <stdarg.h> //For variadic functions
 //Note: prefix is optional, pass NULL to ignore
 void reportError(Location* errorLoc, const char* prefix, const char* fmessage, ...) {
 	fprintf(stderr, "%s:%lu:%lu ", errorLoc->file, errorLoc->line, errorLoc->character);
@@ -59,6 +60,34 @@ char fpeek(FILE* stream) {
 }
 
 const char* _prefix_lex = "LEXER";
+#define BUFF_LEN 512
+
+char default_or_escaped_char(char c) {
+	const char* _escape_char_lookup[] = {"n\n", "r\r", "t\t"};
+	const char** str = _escape_char_lookup;
+	do {
+		const char* compare = *str;
+		if (*compare == c) {
+			return *(++compare);
+		}
+	} while (str++ != _escape_char_lookup+sizeof(_escape_char_lookup));
+	return c;
+}
+
+
+char* consumeString(FILE* fp, Location* parse_location) {
+	char buff[BUFF_LEN] = {0};
+	char c;
+	while ((c = procureNextChar(fp, parse_location)) != EOF && c != '"') {
+		if (c == '\\') c = default_or_escaped_char(procureNextChar(fp, parse_location));
+		buff[strlen(buff)] = c;
+	}
+	if (c == EOF) reportError(parse_location, _prefix_lex, "Malformed string literal - expected '\"', got END-OF-FILE\n");
+	char* output = malloc(sizeof(R_BYTE)*BUFF_LEN);
+	strcpy(output, buff);
+	return output;
+}
+
 Program* Railcar_Lexer(char* fileName) {
 	FILE* lexf = fopen(fileName, "r");
 	if (!lexf) return NULL;
@@ -74,7 +103,9 @@ Program* Railcar_Lexer(char* fileName) {
 
 	//Set initial state of the data stack
 	char buff[128] = {0};
+	DataStack* stack = &(program->stack);
 	while ((c = procureNextChar(lexf, &parse_location)) != EOF) {
+		R_BYTE* selected_byte = stack->content + stack->sz_content;
 		if (c == '/') {
 			consumeRemainderOfLine(lexf, &parse_location);
 			if (c == EOF) break;
@@ -94,8 +125,15 @@ Program* Railcar_Lexer(char* fileName) {
 			while ((c = procureNextChar(lexf, &parse_location)) != EOF && isdigit(c)) {
 				buff[strlen(buff)] = c;
 			}
-			create_token(&(program->stack.sz_content), program->stack.content+program->stack.sz_content, NUMBER, atoi(buff));
-			while (strlen(buff) != 0) { buff[strlen(buff)-1] = 0; }
+			*selected_byte = (R_BYTE)atoi(buff);
+			stack->sz_content++;
+			while (strlen(buff) != 0) { buff[strlen(buff)-1] = 0; } //clear buffer
+		}
+		if (c == '"') {
+			char* str = consumeString(lexf, &parse_location);
+			// *(selected_byte++) = (R_BYTE)strlen(str)+1; //Size of string
+			strcat(selected_byte, str);
+			stack->sz_content += strlen(str)+1;
 		}
 	}
 	program->stack.max_dimensions.x = 8;
@@ -104,7 +142,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 	//Get instructions
 	while ((c = procureNextChar(lexf, &parse_location)) != EOF) {
-		assert(NUM_TOKEN_TYPE == 26 && "Unhandled Token");
+		assert(NUM_TOKEN_TYPE == 27 && "Unhandled Token");
 		Token* tk = tokens+num_tokens;
 		tk->loc = parse_location;
 
@@ -149,6 +187,7 @@ Program* Railcar_Lexer(char* fileName) {
 			case '@': create_token(&num_tokens, tk, RETURN_FLAG, 0);           break;
 			case 'c': create_token(&num_tokens, tk, PRINT_BYTE_AS_CHAR, 0);    break;
 			case 'd': create_token(&num_tokens, tk, PRINT_BYTE_AS_NUM, 0);     break;
+			case '~': create_token(&num_tokens, tk, RELATIVE_MOVE, 0);         break;
 
 			default:  create_token(&num_tokens, tk, UNKNOWN, 0);
 		}

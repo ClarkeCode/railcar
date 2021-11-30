@@ -10,12 +10,14 @@ typedef enum {
 	HEAD_DOWN,
 	REPEAT_MOVE,
 	REPEAT_MOVE_MAX, //Change to REPEAT, can be used as block prefix
+	RELATIVE_MOVE, //Read current byte, and move a corresponding number of positions
 	CHECK_ABILITY_TO_MOVE, //followed by conditional pair
 
 	HEAD_READ, //followed by conditional pair
 	HEAD_WRITE,
 
 	NUMBER,
+	// STRING,
 
 	OPEN_CONDITIONAL,
 	CLOSE_CONDITIONAL,
@@ -68,6 +70,7 @@ typedef struct Token{
 	int id;
 	TOKEN_TYPE type;
 	int value;
+	char* str_value;
 	Location loc;
 	struct Token* next_unconditional;
 	struct Token* next_if_true;
@@ -84,11 +87,12 @@ typedef struct Token{
 typedef struct {
 	size_t x, y;
 } HeadLocation;
-typedef struct {
+typedef unsigned char R_BYTE;
+typedef struct DataStack{
 	HeadLocation current_location;
 	HeadLocation saved_location;
 	HeadLocation max_dimensions;
-	Token content[128]; //TODO: dynamic size data stack
+	R_BYTE content[128]; //TODO: dynamic size data stack
 	size_t sz_content;
 } DataStack;
 

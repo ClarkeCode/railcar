@@ -22,7 +22,7 @@ Flags empty_flags = {0};
 
 
 char* human(TOKEN_TYPE ttype) {
-	assert(NUM_TOKEN_TYPE == 26 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 27 && "Unhandled Token");
 
 	switch (ttype) {
 		case NO_OPERATION: return "NOP"; break;
@@ -33,6 +33,7 @@ char* human(TOKEN_TYPE ttype) {
 		case HEAD_DOWN: return "DOWN"; break;
 		case REPEAT_MOVE: return "REPEAT_MOVE"; break;
 		case REPEAT_MOVE_MAX: return "REPEAT_MOVE_MAX"; break;
+		case RELATIVE_MOVE: return "RELATIVE_MOVE"; break;
 		case CHECK_ABILITY_TO_MOVE: return "CHECK_ABILITY_TO_MOVE"; break;
 
 		case HEAD_READ: return "H_READ"; break;
@@ -147,7 +148,7 @@ void Railcar_Parser(Program* prog) {
 	//TODO: add error reporting function and syntax checking to call
 
 	//TODO: lying here, need to handle all existing tokens
-	assert(NUM_TOKEN_TYPE == 26 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 27 && "Unhandled Token");
 
 	TOKEN_TYPE pairedtokens[] = {OPEN_BLOCK, CLOSE_BLOCK, STAKE_FLAG, RETURN_FLAG};
 	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK, STAKE_FLAG};
@@ -155,7 +156,7 @@ void Railcar_Parser(Program* prog) {
 
 	//Connect tokens that must be paired
 	{
-		Token* current = tokens; Token* last = stopper-1;
+		Token* current = tokens; Token* last = current;
 		for (; current < last; current++) {
 			//If an unpaired closer is reached, the program is malformed
 			if (type_in(current->type, pairedcloser, _SIZE(pairedcloser)) && !current->pair) {
@@ -163,7 +164,7 @@ void Railcar_Parser(Program* prog) {
 					human(current->type), current->loc.file, current->loc.line, current->loc.character); exit(EXIT_FAILURE);
 			}
 			if (type_in(current->type, pairedopener, _SIZE(pairedopener))) {
-				last = rfind_next_token_of_type(last, rstopper,
+				last = find_next_token_of_type(last, rstopper,
 					pair_type_lookup(current->type, pairedopener, pairedcloser, sizeof(pairedopener)));
 				if (!last || last <= current) {
 					fprintf(stderr, "ERROR: no pair found"); exit(EXIT_FAILURE);
@@ -223,7 +224,7 @@ void Railcar_Parser(Program* prog) {
 	for (Token* current = tokens; current < stopper; current++) {
 		//TODO: WARNING - does not properly check validity of lookahead/behind
 
-		if (current->type == REPEAT_MOVE || current->type == REPEAT_MOVE_MAX) {
+		if (current->type == REPEAT_MOVE || current->type == REPEAT_MOVE_MAX || current->type == RELATIVE_MOVE) {
 			apply_prefix(current, current+1);
 			current->next_unconditional = current->prefix_member->junior->next_unconditional;
 		}
@@ -363,7 +364,7 @@ void dump_datastack(FILE* fp, DataStack* ds) {
 
 	for (size_t y = 0; y < ds->max_dimensions.y; y++) {
 		char buff[64] = {0};
-		binary_str_from_byte((char)((ds->content+y)->value), buff, true, ds->current_location.x,
+		binary_str_from_byte(*(ds->content+y), buff, true, ds->current_location.x,
 			(flags.use_ansi && !flags.no_colour && y == ds->current_location.y ? "\x1b[32m" : "")
 		);
 		fprintf(fp, "%c %s\n", ds->current_location.y == y ? '>' : ' ', buff);
@@ -423,7 +424,7 @@ void Railcar_Simulator(Program* prog) {
 	Token* firstTk = prog->instructions;
 	Token* current = NULL;
 	while (!current || current->next_unconditional || current->next_if_false || current->next_if_true) {
-		char* selectedByte = &((char)prog->stack.content[prog->stack.current_location.y].value);
+		R_BYTE* selectedByte = &(prog->stack.content[prog->stack.current_location.y]);
 		int x_pos = prog->stack.current_location.x;
 		int y_pos = prog->stack.current_location.y;
 		
@@ -432,7 +433,7 @@ void Railcar_Simulator(Program* prog) {
 			printf("\nExecuting: "); dump_token(stdout, current);
 		}
 
-		assert(NUM_TOKEN_TYPE == 26 && "Unhandled token");
+		assert(NUM_TOKEN_TYPE == 27 && "Unhandled token");
 
 		Token* nextTk = NULL;
 		if (!current) {
@@ -520,6 +521,14 @@ void Railcar_Simulator(Program* prog) {
 			else if (current->prefix_member->junior->type == HEAD_UP) {prog->stack.current_location.y = 0; }
 			else if (current->prefix_member->junior->type == HEAD_DOWN) {prog->stack.current_location.y = prog->stack.max_dimensions.y-1; }
 			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'\n", human(current->next_unconditional->type));
+			nextTk = current->prefix_member->junior->next_unconditional;
+		}
+		if (current->type == RELATIVE_MOVE) {
+			switch(current->prefix_member->junior->type) {
+				case HEAD_UP: move_head(&(prog->stack.current_location), HEAD_UP, *selectedByte); break;
+				case HEAD_DOWN: move_head(&(prog->stack.current_location), HEAD_DOWN, *selectedByte); break;
+				default: fprintf(stderr, "ERROR: Undefined operand for RELATIVE_MOVE, got '%s'\n", human(current->next_unconditional->type));
+			}
 			nextTk = current->prefix_member->junior->next_unconditional;
 		}
 
