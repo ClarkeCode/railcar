@@ -1,6 +1,7 @@
 #include "rc_utilities.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <stdarg.h> //For variadic functions
 
 //Note: prefix is optional, pass NULL to ignore
