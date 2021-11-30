@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "railcar.h"
+#include "rc_utilities.h"
 
 typedef struct {
 	bool help;
@@ -19,7 +20,8 @@ typedef struct {
 Flags flags = {0};
 Flags empty_flags = {0};
 
-
+const char* _prefix_parse = "PARSER";
+const char* _prefix_sim = "SIMULATOR";
 
 char* human(TOKEN_TYPE ttype) {
 	assert(NUM_TOKEN_TYPE == 27 && "Unhandled Token");
@@ -160,14 +162,14 @@ void Railcar_Parser(Program* prog) {
 		for (; current < last; current++) {
 			//If an unpaired closer is reached, the program is malformed
 			if (type_in(current->type, pairedcloser, _SIZE(pairedcloser)) && !current->pair) {
-				fprintf(stderr, "ERROR: unpaired closing token '%s' at %s:%lu:%lu",
+				reportError(&current->loc, _prefix_parse, "unpaired closing token '%s' at %s:%lu:%lu",
 					human(current->type), current->loc.file, current->loc.line, current->loc.character); exit(EXIT_FAILURE);
 			}
 			if (type_in(current->type, pairedopener, _SIZE(pairedopener))) {
 				last = find_next_token_of_type(last, rstopper,
 					pair_type_lookup(current->type, pairedopener, pairedcloser, sizeof(pairedopener)));
 				if (!last || last <= current) {
-					fprintf(stderr, "ERROR: no pair found"); exit(EXIT_FAILURE);
+					reportError(&current->loc, _prefix_parse, "no pair found"); exit(EXIT_FAILURE);
 				}
 				apply_pair(current, last--);
 			}
@@ -235,7 +237,7 @@ void Railcar_Parser(Program* prog) {
 		}
 		if (current->type == LOOP_FIXED_AMOUNT) {
 			if (!(current+1)->pair)
-				fprintf(stderr, "ERROR: no pair to loop");
+				reportError(&current->loc, _prefix_parse, "no pair to loop");
 			current->next_if_false = (current+1)->pair->senior;
 			current->next_if_true = current+1;
 		}
@@ -250,7 +252,7 @@ void Railcar_Parser(Program* prog) {
 			current->next_unconditional = rfind_next_token_of_type(current, rstopper, OPEN_BLOCK);
 		}
 		if (current->type == END_OF_PROGRAM && current != stopper-1) {
-			fprintf(stderr, "ERROR: '%s' token discovered at invalid position, check Lexer\n", human(current->type));
+			reportError(&current->loc, _prefix_parse, "'%s' token discovered at invalid position, check Lexer\n", human(current->type));
 		}
 	}
 }
@@ -520,14 +522,14 @@ void Railcar_Simulator(Program* prog) {
 			else if (current->prefix_member->junior->type == HEAD_RIGHT) { prog->stack.current_location.x = prog->stack.max_dimensions.x-1; }
 			else if (current->prefix_member->junior->type == HEAD_UP) {prog->stack.current_location.y = 0; }
 			else if (current->prefix_member->junior->type == HEAD_DOWN) {prog->stack.current_location.y = prog->stack.max_dimensions.y-1; }
-			else fprintf(stderr, "ERROR: Undefined operand for REPEAT_MOVE_MAX, got '%s'\n", human(current->next_unconditional->type));
+			else reportError(&current->loc, _prefix_sim, "Undefined operand for REPEAT_MOVE_MAX, got '%s'\n", human(current->next_unconditional->type));
 			nextTk = current->prefix_member->junior->next_unconditional;
 		}
 		if (current->type == RELATIVE_MOVE) {
 			switch(current->prefix_member->junior->type) {
 				case HEAD_UP: move_head(&(prog->stack.current_location), HEAD_UP, *selectedByte); break;
 				case HEAD_DOWN: move_head(&(prog->stack.current_location), HEAD_DOWN, *selectedByte); break;
-				default: fprintf(stderr, "ERROR: Undefined operand for RELATIVE_MOVE, got '%s'\n", human(current->next_unconditional->type));
+				default: reportError(&current->loc, _prefix_sim, "Undefined operand for RELATIVE_MOVE, got '%s'\n", human(current->next_unconditional->type));
 			}
 			nextTk = current->prefix_member->junior->next_unconditional;
 		}
@@ -557,14 +559,6 @@ void Railcar_Simulator(Program* prog) {
 
 
 
-
-
-
-void shellEcho(char* command) {
-	fprintf(stdout, "Running: %s\n", command);
-	int retcode = system(command);
-	fprintf(stdout, "%s %s\n", retcode==EXIT_SUCCESS ? "Success:" : "Failure", command);
-}
 
 void show_usage(FILE* fp) {
 	fprintf(fp, "USAGE: ./railcar.exe [options] <subcommand> filename\n");

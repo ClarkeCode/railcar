@@ -1,5 +1,6 @@
 #ifndef RAILCAR_HEADER
 #define RAILCAR_HEADER
+#include <stdlib.h>
 
 typedef enum {
 	NO_OPERATION,

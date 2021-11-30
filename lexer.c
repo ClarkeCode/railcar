@@ -4,23 +4,8 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "railcar.h"
+#include "rc_utilities.h"
 
-
-#include <stdarg.h> //For variadic functions
-//Note: prefix is optional, pass NULL to ignore
-void reportError(Location* errorLoc, const char* prefix, const char* fmessage, ...) {
-	fprintf(stderr, "%s:%lu:%lu ", errorLoc->file, errorLoc->line, errorLoc->character);
-	if (prefix) fprintf(stderr, "[%s] ", prefix);
-	fprintf(stderr, "ERROR: ");
-
-
-	va_list args;
-	va_start (args, fmessage);
-	vfprintf (stderr, fmessage, args);
-	va_end (args);
-
-	exit(EXIT_FAILURE);
-}
 
 //Pass NULL as an argument to num_tokens if you do not want it to be incremented
 //Pass 0 as an argument to val if the token does not requre a value
