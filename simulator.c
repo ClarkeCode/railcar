@@ -4,7 +4,6 @@
 #include <stdio.h>
 
 extern Flags flags;
-const char ERR_PREFIX[] = "SIMULATOR";
 const char ANSI_RESET_STYLE[] = "\x1b[0m";
 
 //TODO: try reworking to have an internal buffer and returning the buffer as a char*
@@ -154,6 +153,7 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 }
 
 void Railcar_Simulator(Program* prog) {
+	const char ERR_PREFIX[] = "SIMULATOR";
 
 	if (flags.step && flags.use_ansi) { printf("\x1b[s***\n"); }//Save cursor position
 	Token* firstTk = prog->instructions;

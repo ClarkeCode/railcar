@@ -3,7 +3,6 @@
 #include <assert.h>
 
 extern Flags flags;
-const char ERR_PREFIX[] = "PARSER";
 
 Token* _find_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement, bool skipBranches, bool testEquality) {
 	Token* test = current;
@@ -73,6 +72,8 @@ void apply_pair(Token* opener, Token* closer) {
 }
 #define _SIZE(arr) sizeof(arr)/sizeof(arr[0])
 void Railcar_Parser(Program* prog) {
+	const char ERR_PREFIX[] = "PARSER";
+
 	Token* tokens = prog->instructions;
 	size_t numTokens = prog->sz_instructions;
 	Token* stopper = tokens + numTokens;

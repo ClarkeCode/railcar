@@ -7,7 +7,6 @@
 #include "rc_utilities.h"
 
 extern Flags flags;
-const char ERR_PREFIX[] = "LEXER";
 
 
 //Pass NULL as an argument to num_tokens if you do not want it to be incremented
@@ -62,20 +61,21 @@ char default_or_escaped_char(char c) {
 }
 
 
-char* consumeString(FILE* fp, Location* parse_location) {
+char* consumeString(FILE* fp, Location* parse_location, const char* prefix) {
 	char buff[BUFF_LEN] = {0};
 	char c;
 	while ((c = procureNextChar(fp, parse_location)) != EOF && c != '"') {
 		if (c == '\\') c = default_or_escaped_char(procureNextChar(fp, parse_location));
 		buff[strlen(buff)] = c;
 	}
-	if (c == EOF) reportError(parse_location, ERR_PREFIX, "Malformed string literal - expected '\"', got END-OF-FILE\n");
+	if (c == EOF) reportError(parse_location, prefix, "Malformed string literal - expected '\"', got END-OF-FILE\n");
 	char* output = malloc(sizeof(R_BYTE)*BUFF_LEN);
 	strcpy(output, buff);
 	return output;
 }
 
 Program* Railcar_Lexer(char* fileName) {
+	const char ERR_PREFIX[] = "LEXER";
 	FILE* lexf = fopen(fileName, "r");
 	if (!lexf) return NULL;
 
@@ -117,7 +117,7 @@ Program* Railcar_Lexer(char* fileName) {
 			while (strlen(buff) != 0) { buff[strlen(buff)-1] = 0; } //clear buffer
 		}
 		if (c == '"') {
-			char* str = consumeString(lexf, &parse_location);
+			char* str = consumeString(lexf, &parse_location, ERR_PREFIX);
 			// *(selected_byte++) = (R_BYTE)strlen(str)+1; //Size of string
 			strcat(selected_byte, str);
 			stack->sz_content += strlen(str)+1;
