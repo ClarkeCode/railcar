@@ -6,6 +6,9 @@
 #include "railcar.h"
 #include "rc_utilities.h"
 
+extern Flags flags;
+const char ERR_PREFIX[] = "LEXER";
+
 
 //Pass NULL as an argument to num_tokens if you do not want it to be incremented
 //Pass 0 as an argument to val if the token does not requre a value
@@ -44,7 +47,6 @@ char fpeek(FILE* stream) {
 	return temp;
 }
 
-const char* _prefix_lex = "LEXER";
 #define BUFF_LEN 512
 
 char default_or_escaped_char(char c) {
@@ -67,7 +69,7 @@ char* consumeString(FILE* fp, Location* parse_location) {
 		if (c == '\\') c = default_or_escaped_char(procureNextChar(fp, parse_location));
 		buff[strlen(buff)] = c;
 	}
-	if (c == EOF) reportError(parse_location, _prefix_lex, "Malformed string literal - expected '\"', got END-OF-FILE\n");
+	if (c == EOF) reportError(parse_location, ERR_PREFIX, "Malformed string literal - expected '\"', got END-OF-FILE\n");
 	char* output = malloc(sizeof(R_BYTE)*BUFF_LEN);
 	strcpy(output, buff);
 	return output;
@@ -98,9 +100,9 @@ Program* Railcar_Lexer(char* fileName) {
 		if (c == 'o') {
 			do {
 				c = procureNextChar(lexf, &parse_location);
-				if (c == EOF) reportError(&parse_location, _prefix_lex, "Malformed railcar - expected 'o', got END-OF-FILE\n");
+				if (c == EOF) reportError(&parse_location, ERR_PREFIX, "Malformed railcar - expected 'o', got END-OF-FILE\n");
 				if (c != '=' && c != 'o') {
-					reportError(&parse_location, _prefix_lex, "Malformed railcar - expected 'o', got '%c'\n", c);
+					reportError(&parse_location, ERR_PREFIX, "Malformed railcar - expected 'o', got '%c'\n", c);
 				}
 			} while (c != 'o' && c != EOF);
 			break;
@@ -185,7 +187,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 	for (Token* test = tokens; test-tokens < num_tokens; test++) {
 		if (test->type == UNKNOWN) {
-			reportError(&test->loc, _prefix_lex, "Unable to determine token");
+			reportError(&test->loc, ERR_PREFIX, "Unable to determine token");
 		}
 	}
 

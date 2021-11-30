@@ -4,9 +4,8 @@
 #include <stdio.h>
 
 extern Flags flags;
-
+const char ERR_PREFIX[] = "SIMULATOR";
 const char ANSI_RESET_STYLE[] = "\x1b[0m";
-const char _prefix_sim[] = "SIMULATOR";
 
 //TODO: try reworking to have an internal buffer and returning the buffer as a char*
 //Note: pass NULL to ansiColourString to ignore colouring
@@ -256,14 +255,14 @@ void Railcar_Simulator(Program* prog) {
 			else if (current->prefix_member->junior->type == HEAD_RIGHT) { prog->stack.current_location.x = prog->stack.max_dimensions.x-1; }
 			else if (current->prefix_member->junior->type == HEAD_UP) {prog->stack.current_location.y = 0; }
 			else if (current->prefix_member->junior->type == HEAD_DOWN) {prog->stack.current_location.y = prog->stack.max_dimensions.y-1; }
-			else reportError(&current->loc, _prefix_sim, "Undefined operand for REPEAT_MOVE_MAX, got '%s'\n", human(current->next_unconditional->type));
+			else reportError(&current->loc, ERR_PREFIX, "Undefined operand for REPEAT_MOVE_MAX, got '%s'\n", human(current->next_unconditional->type));
 			nextTk = current->prefix_member->junior->next_unconditional;
 		}
 		if (current->type == RELATIVE_MOVE) {
 			switch(current->prefix_member->junior->type) {
 				case HEAD_UP: move_head(&(prog->stack.current_location), HEAD_UP, *selectedByte); break;
 				case HEAD_DOWN: move_head(&(prog->stack.current_location), HEAD_DOWN, *selectedByte); break;
-				default: reportError(&current->loc, _prefix_sim, "Undefined operand for RELATIVE_MOVE, got '%s'\n", human(current->next_unconditional->type));
+				default: reportError(&current->loc, ERR_PREFIX, "Undefined operand for RELATIVE_MOVE, got '%s'\n", human(current->next_unconditional->type));
 			}
 			nextTk = current->prefix_member->junior->next_unconditional;
 		}

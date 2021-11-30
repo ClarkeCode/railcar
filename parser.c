@@ -2,7 +2,8 @@
 #include "rc_utilities.h"
 #include <assert.h>
 
-const char* _prefix_parse = "PARSER";
+extern Flags flags;
+const char ERR_PREFIX[] = "PARSER";
 
 Token* _find_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t, bool doIncrement, bool skipBranches, bool testEquality) {
 	Token* test = current;
@@ -92,14 +93,14 @@ void Railcar_Parser(Program* prog) {
 		for (; current < last; current++) {
 			//If an unpaired closer is reached, the program is malformed
 			if (type_in(current->type, pairedcloser, _SIZE(pairedcloser)) && !current->pair) {
-				reportError(&current->loc, _prefix_parse, "unpaired closing token '%s' at %s:%lu:%lu",
+				reportError(&current->loc, ERR_PREFIX, "unpaired closing token '%s' at %s:%lu:%lu",
 					human(current->type), current->loc.file, current->loc.line, current->loc.character); exit(EXIT_FAILURE);
 			}
 			if (type_in(current->type, pairedopener, _SIZE(pairedopener))) {
 				last = find_next_token_of_type(last, rstopper,
 					pair_type_lookup(current->type, pairedopener, pairedcloser, sizeof(pairedopener)));
 				if (!last || last <= current) {
-					reportError(&current->loc, _prefix_parse, "no pair found"); exit(EXIT_FAILURE);
+					reportError(&current->loc, ERR_PREFIX, "no pair found"); exit(EXIT_FAILURE);
 				}
 				apply_pair(current, last--);
 			}
@@ -167,7 +168,7 @@ void Railcar_Parser(Program* prog) {
 		}
 		if (current->type == LOOP_FIXED_AMOUNT) {
 			if (!(current+1)->pair)
-				reportError(&current->loc, _prefix_parse, "no pair to loop");
+				reportError(&current->loc, ERR_PREFIX, "no pair to loop");
 			current->next_if_false = (current+1)->pair->senior;
 			current->next_if_true = current+1;
 		}
@@ -182,7 +183,7 @@ void Railcar_Parser(Program* prog) {
 			current->next_unconditional = rfind_next_token_of_type(current, rstopper, OPEN_BLOCK);
 		}
 		if (current->type == END_OF_PROGRAM && current != stopper-1) {
-			reportError(&current->loc, _prefix_parse, "'%s' token discovered at invalid position, check Lexer\n", human(current->type));
+			reportError(&current->loc, ERR_PREFIX, "'%s' token discovered at invalid position, check Lexer\n", human(current->type));
 		}
 	}
 }
