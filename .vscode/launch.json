@@ -9,7 +9,7 @@
 		"type": "cppvsdbg",
 		"request": "launch",
 		"program": "${workspaceFolder}\\${fileBasenameNoExtension}.exe",
-		"args": ["--show-lex", "--show-parse", "step", "--gvCPX", "--s", "examples\\06-named-flags.rc"],
+		"args": ["--show-lex", "--show-parse", "step", "--gvCPX", "--i", "examples\\07-relative-move.rc"],
 		"stopAtEntry": false,
 		"cwd": "${workspaceFolder}",
 		"environment": [],

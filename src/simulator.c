@@ -281,6 +281,8 @@ void Railcar_Simulator(Program* prog) {
 			switch(current->prefix_member->junior->type) {
 				case HEAD_UP: move_head(&(prog->stack.current_location), HEAD_UP, *selectedByte); break;
 				case HEAD_DOWN: move_head(&(prog->stack.current_location), HEAD_DOWN, *selectedByte); break;
+				case HEAD_LEFT: move_head(&(prog->stack.current_location), HEAD_LEFT, *selectedByte); break;
+				case HEAD_RIGHT: move_head(&(prog->stack.current_location), HEAD_RIGHT, *selectedByte); break;
 				default: reportError(&current->loc, ERR_PREFIX, "Undefined operand for RELATIVE_MOVE, got '%s'\n", human(current->next_unconditional->type));
 			}
 			nextTk = current->prefix_member->junior->next_unconditional;
