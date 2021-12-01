@@ -81,7 +81,6 @@ integral_t consumeNumber(FILE* fp, Location* parse_location) {
 	return (integral_t)atoi(buff);
 }
 
-
 Program* Railcar_Lexer(char* fileName) {
 	const char ERR_PREFIX[] = "LEXER";
 	FILE* lexf = fopen(fileName, "r");
@@ -89,7 +88,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 	Program* program = calloc(1, sizeof(Program));
 	//TODO: arbitrary instruction length
-	Token* tokens = calloc(128, sizeof(Token));
+	Token* tokens = calloc(PROGRAM_MAX_INSTRUCTIONS, sizeof(Token));
 	size_t num_tokens = 0;
 
 	Location parse_location = {.file = fileName, .line = 0, .character = -1};

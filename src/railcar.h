@@ -103,6 +103,7 @@ typedef struct HLocationMapping{
 	HeadLocation value;
 }HLocationMapping;
 
+#define PROGRAM_MAX_INSTRUCTIONS 512
 typedef struct Program{
 	DataStack stack;
 	Token* instructions;
