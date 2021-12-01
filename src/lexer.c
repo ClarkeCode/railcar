@@ -186,10 +186,10 @@ Program* Railcar_Lexer(char* fileName) {
 
 		//NOTE: Numbers come out of the switch statement as UNKNOWN tokens, create token does not need to increment num_tokens
 		if (isdigit(c)) {
-			bool is_fixed_loop = fpeek(lexf) == ']';
 			ungetc(c, lexf);
-			if (is_fixed_loop) create_token(NULL, tk, LOOP_FIXED_AMOUNT, consumeNumber(lexf, &parse_location));
-			else create_token(NULL, tk, REPEAT_MOVE, consumeNumber(lexf, &parse_location));
+			R_BYTE value = (R_BYTE)consumeNumber(lexf, &parse_location);
+			if (fpeek(lexf) == ']') create_token(NULL, tk, LOOP_FIXED_AMOUNT, value);
+			else create_token(NULL, tk, REPEAT_MOVE, value);
 			continue;
 		}
 
