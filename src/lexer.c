@@ -159,6 +159,7 @@ Program* Railcar_Lexer(char* fileName) {
 				if ((c = procureNextChar(lexf, &parse_location)) == EOF)      reportError(&parse_location, ERR_PREFIX, "Write - expected '0' or '1', got END-OF-FILE\n");
 				if (!(c == '0' || c == '1'))                                  reportError(&parse_location, ERR_PREFIX, "Write - expected '0' or '1', got '%c'\n", c);
 				create_token(&num_tokens, tk, HEAD_WRITE, c == '0' ? 0 : 1);
+				c = '\x3'; //Change c to a non-digit to avoid loop/repeat checks
 				break;
 
 			case '(': create_token(&num_tokens, tk, OPEN_CONDITIONAL, 0);      break;
