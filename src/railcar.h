@@ -125,6 +125,8 @@ typedef struct {
 	bool show_parse;
 	bool step;
 	bool step_interactive;
+	bool step_after_line;
+	size_t step_line;
 	bool use_ansi;
 	bool no_colour;
 	bool graphviz;

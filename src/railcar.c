@@ -39,7 +39,14 @@ int main(int argc, char* argv[]) {
 		char* item = *argv++; argc--;
 		if      (strcmp(item, "--show-lex") == 0) flags.show_lex = true;
 		else if (strcmp(item, "--show-parse") == 0) flags.show_parse = true;
-		else if (strcmp(item, "step") == 0) flags.step = true;
+		else if (strncmp(item, "--step", 6) == 0) {
+			flags.step = true;
+			if (strlen(item+6) != 0) {
+				flags.step = flags.step_interactive = false;
+				flags.step_after_line = true;
+				flags.step_line = (size_t)atoi(item+6);
+			}
+		}
 		else if ((strcmp(item, "--h") == 0 || strcmp(item, "--help") == 0)) flags.help = true;
 		else if ((strcmp(item, "--s") == 0 || strcmp(item, "--silent") == 0)) flags.silent = true;
 		else if (strcmp(item, "--i") == 0) flags.step_interactive = true;

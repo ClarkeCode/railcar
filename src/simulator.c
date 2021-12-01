@@ -95,7 +95,8 @@ void dump_tokens(FILE* fp, Token* tkArr, size_t num_tk) {
 		dump_token(fp, tkArr+x);
 	}
 }
-void dump_datastack(FILE* fp, DataStack* ds) {
+void dump_datastack(FILE* fp, Program* prog) {
+	DataStack* ds = &(prog->stack);
 	fprintf(fp, " %c", ds->current_location.x == -1 ? 'v' : ' '); 
 	for(size_t x = 0; x < 9; x++) {if(x==4)fprintf(fp, " ");fprintf(fp, "%c", x == ds->current_location.x ? 'v' : ' ');}
 	fprintf(fp, "\n");
@@ -105,12 +106,21 @@ void dump_datastack(FILE* fp, DataStack* ds) {
 		binary_str_from_byte(*(ds->content+y), buff, true, ds->current_location.x,
 			(flags.use_ansi && !flags.no_colour && y == ds->current_location.y ? "\x1b[32m" : "")
 		);
-		fprintf(fp, "%c %s\n", ds->current_location.y == y ? '>' : ' ', buff);
+		fprintf(fp, "%c %s", ds->current_location.y == y ? '>' : ' ', buff);
+
+		HLocationMapping* hFlag = prog->flag_values;
+		while (hFlag->key) {
+			if (y == hFlag->value.y) {
+				fprintf(fp, " '%s':(%lu, %lu)", hFlag->key, hFlag->value.x, hFlag->value.y);
+			}
+			hFlag++;
+		}
+		fprintf(fp, "\n");
 	}
 }
 void dump_program(FILE* fp, Program* prog) {
 	fprintf(fp, "Datastack:\n");
-	dump_datastack(fp, &(prog->stack));
+	dump_datastack(fp, prog);
 	fprintf(fp, "\nInstructions:\n");
 	dump_tokens(fp, prog->instructions, prog->sz_instructions);
 }
@@ -169,18 +179,11 @@ void Railcar_Simulator(Program* prog) {
 		R_BYTE* selectedByte = &(prog->stack.content[prog->stack.current_location.y]);
 		int x_pos = prog->stack.current_location.x;
 		int y_pos = prog->stack.current_location.y;
-		
-		if (flags.step) {
-			dump_datastack(stdout, &prog->stack);
-			printf("\nExecuting: "); dump_token(stdout, current);
-		}
-
-		assert(NUM_TOKEN_TYPE == 28 && "Unhandled token");
 
 		Token* nextTk = NULL;
 		if (!current) {
 			nextTk = firstTk;
-			if (flags.step) {
+			if (flags.step && flags.step_interactive) {
 				printf("\nNext TK: "); dump_token(stdout, nextTk);
 				printf("-----------\n");
 			}
@@ -190,7 +193,22 @@ void Railcar_Simulator(Program* prog) {
 		else if (current->type == OPEN_BLOCK || current->type == CLOSE_BLOCK) {
 			current = current->next_unconditional; continue;
 		}
-		else if (current->type == STAKE_FLAG) {
+
+
+		//Printing
+		if (flags.step_after_line && current->loc.line+1 == flags.step_line) {
+			flags.step = flags.step_interactive = true;
+			flags.step_after_line = false;
+		}
+		if (flags.step && flags.step_interactive) {
+			dump_datastack(stdout, &prog->stack);
+			printf("\nExecuting: "); dump_token(stdout, current);
+		}
+
+		assert(NUM_TOKEN_TYPE == 28 && "Unhandled token");
+
+		
+		if (current->type == STAKE_FLAG) {
 			
 			HLocationMapping* saved_locations = prog->flag_values;
 			while(strlen(saved_locations->key) != 0 && strcmp(current->str_value, saved_locations->key) != 0) { ++saved_locations; }
@@ -212,7 +230,7 @@ void Railcar_Simulator(Program* prog) {
 		}
 		else if (current->next_unconditional) {
 			nextTk = current->next_unconditional;
-			if (flags.step) { printf("Next TK: "); dump_token(stdout, nextTk); }
+			if (flags.step && flags.step_interactive) { printf("Next TK: "); dump_token(stdout, nextTk); }
 		}
 		
 		if (current->type == HEAD_READ) {
@@ -220,7 +238,7 @@ void Railcar_Simulator(Program* prog) {
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			if (flags.step) { printf("Read head got '%d'\nNext TK: ", result); dump_token(stdout, nextTk); }
+			if (flags.step && flags.step_interactive) { printf("Read head got '%d'\nNext TK: ", result); dump_token(stdout, nextTk); }
 		}
 		if (current->type == CHECK_ABILITY_TO_MOVE) {
 			bool can_move = false;
@@ -241,20 +259,20 @@ void Railcar_Simulator(Program* prog) {
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			if (flags.step) {printf("At end got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);}
+			if (flags.step && flags.step_interactive) {printf("At end got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);}
 		}
 		if (current->type == LOOP_UNTIL_BEGINNING) {
 			bool result = x_pos == -1;
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			
-			if (flags.step) {printf("At beginning got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);}
+			if (flags.step && flags.step_interactive) {printf("At beginning got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);}
 		}
 		if (current->type == LOOP_FIXED_AMOUNT) {
 			bool result = (current->value--) == 0;
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
-			if (flags.step) {printf("Loop fixed has '%d' remaining\nNext TK: ", current->value); dump_token(stdout, nextTk);}
+			if (flags.step && flags.step_interactive) {printf("Loop fixed has '%d' remaining\nNext TK: ", current->value); dump_token(stdout, nextTk);}
 		}
 
 		
@@ -294,15 +312,14 @@ void Railcar_Simulator(Program* prog) {
 			else                *selectedByte = write0ToByte(*selectedByte, x_pos);
 		}
 		
-		if (flags.step) printf("-----------\n");
-
-		// break;
+		//Move to the next instruction
 		current = nextTk;
+
 		if (flags.step && flags.step_interactive) {
+			printf("-----------\n");
 			char ch; scanf("%c", &ch);
 			if (ch == 'q') break;
-		}
-		
+		}		
 		if (flags.step && flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
 	if (flags.step) {
