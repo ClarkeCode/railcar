@@ -1,0 +1,23 @@
+//Counts the length of the provided string
+
+0
+"String of some unknown length"
+o=o
+
+//!>r(w1)(w0[?<($)(-)<r(w1)(w0#)]) //accumulate
+
+
+
+&"Accumulator"v
+&"Str start"
+
+[r(-)(
+	&"Str position"
+	
+	@"Accumulator"
+	!>r(w1)(w0[?<($)(-)<r(w1)(w0#)]) //accumulate
+	@"Str position"
+!<v
+)>e] //next char
+
+@"Accumulator"d
