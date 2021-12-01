@@ -28,7 +28,7 @@ void shellEcho(const char* command) {
 
 
 char* human(TOKEN_TYPE ttype) {
-	assert(NUM_TOKEN_TYPE == 27 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 28 && "Unhandled Token");
 
 	switch (ttype) {
 		case NO_OPERATION: return "NOP"; break;
@@ -46,6 +46,7 @@ char* human(TOKEN_TYPE ttype) {
 		case HEAD_WRITE: return "H_WRITE"; break;
 
 		case NUMBER: return "NUMBER"; break;
+		case STRING: return "STRING"; break;
 
 		case OPEN_CONDITIONAL: return "OPEN_CONDITIONAL"; break;
 		case CLOSE_CONDITIONAL: return "CLOSE_CONDITIONAL"; break;

@@ -1,6 +1,7 @@
 #include "railcar.h"
 #include "rc_utilities.h"
 #include <assert.h>
+#include <string.h>
 
 extern Flags flags;
 
@@ -21,6 +22,16 @@ Token* find_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) 
 
 Token* rfind_next_token_of_type(Token* current, Token* stopper, TOKEN_TYPE tk_t) {
 	return _find_next_token_of_type(current, stopper, tk_t, false, false, true);
+}
+
+bool tk_of_type(Token* tk, TOKEN_TYPE tk_t) { return tk->type == tk_t; }
+bool tk_in_type_arr(Token* tk, TOKEN_TYPE* tk_tarr, size_t sz) { return type_in(tk->type, tk_tarr, sz); }
+
+Token* rfind_next_token_in_type_arr(Token* current, Token* stopper, TOKEN_TYPE* tk_tarr, size_t sz) {
+	while (current-- != stopper) {
+		if (tk_in_type_arr(current, tk_tarr, sz)) return current;
+	}
+	return NULL;
 }
 
 void setup_conditional_branch(Token* current, Token* tokens, Token* stopper) {
@@ -82,30 +93,44 @@ void Railcar_Parser(Program* prog) {
 	//TODO: add error reporting function and syntax checking to call
 
 	//TODO: lying here, need to handle all existing tokens
-	assert(NUM_TOKEN_TYPE == 27 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 28 && "Unhandled Token");
 
-	TOKEN_TYPE pairedtokens[] = {OPEN_BLOCK, CLOSE_BLOCK, STAKE_FLAG, RETURN_FLAG};
-	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK, STAKE_FLAG};
-	TOKEN_TYPE pairedcloser[] = {CLOSE_BLOCK, RETURN_FLAG};
+	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK};
+	TOKEN_TYPE pairedcloser[] = {CLOSE_BLOCK};
 
 	//Connect tokens that must be paired
+
 	{
-		Token* current = tokens; Token* last = current;
-		for (; current < last; current++) {
-			//If an unpaired closer is reached, the program is malformed
-			if (type_in(current->type, pairedcloser, _SIZE(pairedcloser)) && !current->pair) {
-				reportError(&current->loc, ERR_PREFIX, "unpaired closing token '%s' at %s:%lu:%lu",
-					human(current->type), current->loc.file, current->loc.line, current->loc.character); exit(EXIT_FAILURE);
+		Token* check_closers = tokens;
+		Token* last = stopper-1;
+		Token* test_open = stopper-1;
+		Token* closer = stopper-1;
+
+		//Pair all 'opener' tokens
+		test_open = rfind_next_token_in_type_arr(last, rstopper, pairedopener, _SIZE(pairedopener));
+		do {
+			if (!test_open) break; //No more opener pairs
+			TOKEN_TYPE closer_t = pair_type_lookup(test_open->type, pairedopener, pairedcloser, _SIZE(pairedopener));
+
+			closer = find_next_token_of_type(test_open, stopper, closer_t);
+			while (closer && closer->pair) {
+				closer = find_next_token_of_type(closer+1, stopper, closer_t);
 			}
-			if (type_in(current->type, pairedopener, _SIZE(pairedopener))) {
-				last = find_next_token_of_type(last, rstopper,
-					pair_type_lookup(current->type, pairedopener, pairedcloser, sizeof(pairedopener)));
-				if (!last || last <= current) {
-					reportError(&current->loc, ERR_PREFIX, "no pair found"); exit(EXIT_FAILURE);
-				}
-				apply_pair(current, last--);
+
+			if (!closer) reportError(&test_open->loc, ERR_PREFIX, "%s has no closing token. Expected '%s'\n", human(closer_t));
+			apply_pair(test_open, closer);
+			test_open = rfind_next_token_in_type_arr(test_open, rstopper, pairedopener, _SIZE(pairedopener));
+
+		} while(test_open != rstopper);
+
+		//Report error if any 'closers' are unpaired
+		do {
+			if (tk_in_type_arr(check_closers, pairedcloser, _SIZE(pairedcloser)) && !check_closers->pair) {
+				reportError(&check_closers->loc, ERR_PREFIX, "%s has no opening token. Expected '%s'\n",
+					human(check_closers->type),
+					human(pair_type_lookup(check_closers->type, pairedopener, pairedcloser, _SIZE(pairedopener))));
 			}
-		}
+		} while (check_closers++ != stopper);
 	}
 
 
@@ -144,9 +169,9 @@ void Railcar_Parser(Program* prog) {
 		HEAD_DOWN,
 		OPEN_CONDITIONAL,
 		CLOSE_CONDITIONAL,
-		STAKE_FLAG,
 		PRINT_BYTE_AS_CHAR,
-		PRINT_BYTE_AS_NUM
+		PRINT_BYTE_AS_NUM,
+		STRING
 	};
 	for (Token* current = tokens; current < stopper; current++) {
 		//TODO: WARNING - does not properly check validity of lookahead/behind
@@ -174,8 +199,37 @@ void Railcar_Parser(Program* prog) {
 			current->next_if_true = current+1;
 		}
 
+		if (current->type == STAKE_FLAG) {
+			apply_prefix(current, current+1);
+			if ((current+1)->type != STRING) reportError(&current->loc, ERR_PREFIX, "Invalid operand for %s, expected '%s' got '%s'", human(STAKE_FLAG), human(STRING), human((current+1)->type));
+
+			char* candidate_key = current->str_value = current->prefix_member->junior->str_value;
+			HLocationMapping* iter = prog->flag_values;
+			while(iter->key && strcmp(candidate_key, iter->key) != 0) {
+				++iter;
+			}
+			if (!iter->key) iter->key=calloc(strlen(candidate_key), sizeof(char));
+
+			strcpy(iter->key, candidate_key);
+			current->next_unconditional = current->prefix_member->junior->next_unconditional;
+		}
+
 		if (current->type == RETURN_FLAG) {
-			current->next_unconditional = next_nonconditional_token(current, stopper);
+			apply_prefix(current, current+1);
+			if ((current+1)->type != STRING) reportError(&current->loc, ERR_PREFIX, "Invalid operand for %s, expected '%s' got '%s'", human(STAKE_FLAG), human(STRING), human((current+1)->type));
+			
+			char* candidate_key = current->str_value = current->prefix_member->junior->str_value;
+			HLocationMapping* iter = prog->flag_values;
+			while(iter->key && strcmp(candidate_key, iter->key) != 0) {
+				++iter;
+			}
+
+			
+			if (iter->key) {
+				prog->stack.current_location = iter->value;
+			}
+
+			current->next_unconditional = next_nonconditional_token(current+2, stopper);
 		}
 		if (current->type == GOTO_BLOCK_END) {
 			current->next_unconditional = find_next_token_of_type(current, stopper, CLOSE_BLOCK);

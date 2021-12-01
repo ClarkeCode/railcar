@@ -129,7 +129,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 	//Get instructions
 	while ((c = procureNextChar(lexf, &parse_location)) != EOF) {
-		assert(NUM_TOKEN_TYPE == 27 && "Unhandled Token");
+		assert(NUM_TOKEN_TYPE == 28 && "Unhandled Token");
 		Token* tk = tokens+num_tokens;
 		tk->loc = parse_location;
 
@@ -176,6 +176,11 @@ Program* Railcar_Lexer(char* fileName) {
 			case 'd': create_token(&num_tokens, tk, PRINT_BYTE_AS_NUM, 0);     break;
 			case '~': create_token(&num_tokens, tk, RELATIVE_MOVE, 0);         break;
 
+			case '\"':
+				create_token(&num_tokens, tk, STRING, 0);
+				char* sval = consumeString(lexf, &parse_location, ERR_PREFIX);
+				tk->str_value = calloc(strlen(sval)+1, sizeof(char));
+				strcpy(tk->str_value, sval); break;
 			default:  create_token(&num_tokens, tk, UNKNOWN, 0);
 		}
 	}

@@ -79,6 +79,10 @@ void dump_token(FILE* fp, Token* tk) {
 		tk->id, human(tk->type));
 	if (tk->type == HEAD_WRITE || tk->type == REPEAT_MOVE) 
 		fprintf(fp, " - '%d'", tk->value);
+	
+	if (tk->str_value) {
+		fprintf(fp, " '%s'", tk->str_value);
+	}
 	if (nextTk) {
 		if (tk->next_unconditional) fprintf(fp, " NU: %lu", tk->next_unconditional->id);
 		if (tk->next_if_false) fprintf(fp, " NF: %lu",tk->next_if_false->id);
@@ -168,7 +172,7 @@ void Railcar_Simulator(Program* prog) {
 			printf("\nExecuting: "); dump_token(stdout, current);
 		}
 
-		assert(NUM_TOKEN_TYPE == 27 && "Unhandled token");
+		assert(NUM_TOKEN_TYPE == 28 && "Unhandled token");
 
 		Token* nextTk = NULL;
 		if (!current) {
@@ -184,11 +188,23 @@ void Railcar_Simulator(Program* prog) {
 			current = current->next_unconditional; continue;
 		}
 		else if (current->type == STAKE_FLAG) {
-			prog->stack.saved_location = prog->stack.current_location;
+			
+			HLocationMapping* saved_locations = prog->flag_values;
+			while(strlen(saved_locations->key) != 0 && strcmp(current->str_value, saved_locations->key) != 0) { ++saved_locations; }
+			if (!saved_locations->key) {
+				saved_locations->key=calloc(strlen(current->str_value)+1, sizeof(char));
+				strcpy(saved_locations->key, current->str_value);
+			}
+
+			saved_locations->value = prog->stack.current_location;
 			nextTk = current->next_unconditional;
 		}
 		else if (current->type == RETURN_FLAG) {
-			prog->stack.current_location = prog->stack.saved_location;
+			HLocationMapping* saved_locations = prog->flag_values;
+			while(saved_locations->key != 0 && strcmp(current->str_value, saved_locations->key) != 0) { ++saved_locations; }
+			if (!saved_locations->key) reportError(&current->loc, ERR_PREFIX, "Cannot move to position, named flag '%s' does not exist", current->str_value);
+
+			prog->stack.current_location = saved_locations->value;
 			nextTk = current->next_unconditional;
 		}
 		else if (current->next_unconditional) {

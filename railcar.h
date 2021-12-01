@@ -19,7 +19,7 @@ typedef enum {
 	HEAD_WRITE,
 
 	NUMBER,
-	// STRING,
+	STRING,
 
 	OPEN_CONDITIONAL,
 	CLOSE_CONDITIONAL,
@@ -98,10 +98,17 @@ typedef struct DataStack{
 	size_t sz_content;
 } DataStack;
 
+typedef struct HLocationMapping{
+	char* key;
+	HeadLocation value;
+}HLocationMapping;
+
 typedef struct Program{
 	DataStack stack;
 	Token* instructions;
 	size_t sz_instructions;
+
+	HLocationMapping flag_values[128];
 } Program;
 
 Program* Railcar_Lexer(char* fileName);
