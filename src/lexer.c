@@ -13,12 +13,10 @@ extern Flags flags;
 //Pass 0 as an argument to val if the token does not requre a value
 void create_token(size_t* num_tokens, Token* tk, TOKEN_TYPE tk_t, int val) {
 	if (tk) {
-		tk->id = *num_tokens;
+		if (num_tokens) tk->id = (*num_tokens)++;
 		tk->type = tk_t;
 		if (val != 0) tk->value = val;
 	}
-	if (num_tokens)
-		(*num_tokens)++;
 }
 
 char procureNextChar(FILE* fp, Location* parse_location) {
@@ -49,7 +47,7 @@ char fpeek(FILE* stream) {
 #define BUFF_LEN 512
 
 char default_or_escaped_char(char c) {
-	const char* _escape_char_lookup[] = {"n\n", "r\r", "t\t"};
+	const char* _escape_char_lookup[] = {"n\n", "r\r", "t\t","0\0"};
 	const char** str = _escape_char_lookup;
 	do {
 		const char* compare = *str;
@@ -73,6 +71,16 @@ char* consumeString(FILE* fp, Location* parse_location, const char* prefix) {
 	strcpy(output, buff);
 	return output;
 }
+
+typedef R_BYTE integral_t;
+integral_t consumeNumber(FILE* fp, Location* parse_location) {
+	char buff[BUFF_LEN] = {0};
+	while (isdigit(fpeek(fp))) {
+		buff[strlen(buff)] = procureNextChar(fp, parse_location);
+	}
+	return (integral_t)atoi(buff);
+}
+
 
 Program* Railcar_Lexer(char* fileName) {
 	const char ERR_PREFIX[] = "LEXER";
@@ -108,13 +116,9 @@ Program* Railcar_Lexer(char* fileName) {
 			break;
 		}
 		if (isdigit(c)) {
-			buff[0] = c;
-			while ((c = procureNextChar(lexf, &parse_location)) != EOF && isdigit(c)) {
-				buff[strlen(buff)] = c;
-			}
-			*selected_byte = (R_BYTE)atoi(buff);
+			ungetc(c, lexf);
+			*selected_byte = (R_BYTE) consumeNumber(lexf, &parse_location);
 			stack->sz_content++;
-			while (strlen(buff) != 0) { buff[strlen(buff)-1] = 0; } //clear buffer
 		}
 		if (c == '"') {
 			char* str = consumeString(lexf, &parse_location, ERR_PREFIX);
@@ -140,11 +144,7 @@ Program* Railcar_Lexer(char* fileName) {
 			continue;
 		}
 		if (c == '\n' || c == ' ' || c == '\t') continue;
-		if (c >= '2' && c <= '9') {
-			if (fpeek(lexf) == ']') create_token(&num_tokens, tk, LOOP_FIXED_AMOUNT, atoi(&c));
-			else create_token(&num_tokens, tk, REPEAT_MOVE, atoi(&c));
-			continue;
-		}
+		
 		
 		switch (c) {
 			case '-': create_token(&num_tokens, tk, NO_OPERATION, 0);          break;
@@ -156,8 +156,8 @@ Program* Railcar_Lexer(char* fileName) {
 
 			case 'r': create_token(&num_tokens, tk, HEAD_READ, 0);             break;
 			case 'w':
-				if ((c = procureNextChar(lexf, &parse_location)) == EOF) return NULL;
-				if (!(c == '0' || c == '1')) return NULL;
+				if ((c = procureNextChar(lexf, &parse_location)) == EOF)      reportError(&parse_location, ERR_PREFIX, "Write - expected '0' or '1', got END-OF-FILE\n");
+				if (!(c == '0' || c == '1'))                                  reportError(&parse_location, ERR_PREFIX, "Write - expected '0' or '1', got '%c'\n", c);
 				create_token(&num_tokens, tk, HEAD_WRITE, c == '0' ? 0 : 1);
 				break;
 
@@ -183,18 +183,24 @@ Program* Railcar_Lexer(char* fileName) {
 				strcpy(tk->str_value, sval); break;
 			default:  create_token(&num_tokens, tk, UNKNOWN, 0);
 		}
+
+		//NOTE: Numbers come out of the switch statement as UNKNOWN tokens, create token does not need to increment num_tokens
+		if (isdigit(c)) {
+			bool is_fixed_loop = fpeek(lexf) == ']';
+			ungetc(c, lexf);
+			if (is_fixed_loop) create_token(NULL, tk, LOOP_FIXED_AMOUNT, consumeNumber(lexf, &parse_location));
+			else create_token(NULL, tk, REPEAT_MOVE, consumeNumber(lexf, &parse_location));
+			continue;
+		}
+
+
+		if (tk->type == UNKNOWN) reportError(&tk->loc, ERR_PREFIX, "Unable to determine token, got '%c'\n", c);
 	}
 	create_token(&num_tokens, tokens+num_tokens, END_OF_PROGRAM, 0);
 
 	program->instructions = tokens;
 	program->sz_instructions = num_tokens;
 	fclose(lexf);
-
-	for (Token* test = tokens; test-tokens < num_tokens; test++) {
-		if (test->type == UNKNOWN) {
-			reportError(&test->loc, ERR_PREFIX, "Unable to determine token");
-		}
-	}
 
 	return program;
 }
