@@ -116,9 +116,9 @@ void dump_program(FILE* fp, Program* prog) {
 }
 
 void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
-	const bool showConditionals = false;
-	const bool showPairedTokens = false;
-	const bool showPrefixedTokens = false;
+	const bool showConditionals = flags.graphviz_conditionals;
+	const bool showPairedTokens = flags.graphviz_pairs;
+	const bool showPrefixedTokens = flags.graphviz_prefixed;
 	fprintf(fp, "digraph {\n");
 	// fprintf(fp, "\tlayout=neato;\n");
 	Token* current;
@@ -129,6 +129,9 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
 
 		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
+		if (current->str_value) {
+			fprintf(fp, " '%s'", current->str_value);
+		}
 		if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
 			fprintf(fp, " - %s", human((current+1)->type));
 		}

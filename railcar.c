@@ -43,9 +43,14 @@ int main(int argc, char* argv[]) {
 		else if ((strcmp(item, "--h") == 0 || strcmp(item, "--help") == 0)) flags.help = true;
 		else if ((strcmp(item, "--s") == 0 || strcmp(item, "--silent") == 0)) flags.silent = true;
 		else if (strcmp(item, "--i") == 0) flags.step_interactive = true;
-		else if (strcmp(item, "--gv") == 0) flags.graphviz = true;
 		else if (strcmp(item, "--no-colour") == 0) flags.no_colour = true;
 		else if (strcmp(item, "--no-ansi") == 0) flags.use_ansi = false;
+		else if (strncmp(item, "--gv", 4) == 0) {
+			flags.graphviz = true;
+			if (strchr(item+4, 'C') != NULL) flags.graphviz_conditionals = true;
+			if (strchr(item+4, 'P') != NULL) flags.graphviz_pairs = true;
+			if (strchr(item+4, 'X') != NULL) flags.graphviz_prefixed = true;
+		}
 
 		else {
 			fileName = item;

@@ -128,5 +128,8 @@ typedef struct {
 	bool use_ansi;
 	bool no_colour;
 	bool graphviz;
+	bool graphviz_conditionals;
+	bool graphviz_pairs;
+	bool graphviz_prefixed;
 } Flags;
 #endif
