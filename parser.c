@@ -189,8 +189,9 @@ void Railcar_Parser(Program* prog) {
 		}
 
 		if (current->type == LOOP_UNTIL_END || current->type == LOOP_UNTIL_BEGINNING) {
-			current->next_if_false = rfind_next_token_of_type(current, rstopper, OPEN_BLOCK)->next_unconditional;
+			// current->next_if_false = rfind_next_token_of_type(current, rstopper, OPEN_BLOCK)->next_unconditional;
 			current->next_if_true = find_next_token_of_type(current, stopper, CLOSE_BLOCK);
+			current->next_if_false = current->next_if_true->pair->senior->next_unconditional;
 		}
 		if (current->type == LOOP_FIXED_AMOUNT) {
 			if (!(current+1)->pair)
@@ -224,12 +225,12 @@ void Railcar_Parser(Program* prog) {
 				++iter;
 			}
 
-			
+
 			if (iter->key) {
 				prog->stack.current_location = iter->value;
 			}
 
-			current->next_unconditional = next_nonconditional_token(current+2, stopper);
+			current->next_unconditional = next_nonconditional_token(current+1, stopper);
 		}
 		if (current->type == GOTO_BLOCK_END) {
 			current->next_unconditional = find_next_token_of_type(current, stopper, CLOSE_BLOCK);
