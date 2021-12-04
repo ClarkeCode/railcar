@@ -78,3 +78,66 @@ bool type_in(TOKEN_TYPE t, TOKEN_TYPE* desiredTypes, size_t sz) {
 	}
 	return false;
 }
+
+
+
+
+extern Flags flags;
+void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
+	const bool showConditionals = flags.graphviz_conditionals;
+	const bool showPairedTokens = flags.graphviz_pairs;
+	const bool showPrefixedTokens = flags.graphviz_prefixed;
+	fprintf(fp, "digraph {\n");
+	fprintf(fp, "compound=true;\n");
+	// fprintf(fp, "\tlayout=neato;\n");
+	Token* current;
+
+	for (size_t x = 0, block_num = 0; x<num_tk; x++) {
+		current = tkArr+x;
+		if (current->type == OPEN_BLOCK) {
+			fprintf(fp, "subgraph cluster_%lu{\ncolor=blue;\nlabel=\"Block #%lu\";\n", block_num, block_num);
+			for(Token* sub = current; sub <= current->pair->junior; sub++) {
+				fprintf(fp, "%lu ", sub->id);
+			}
+			fprintf(fp, ";\n}\n");
+			block_num++;
+		}
+
+	}
+
+	for (size_t x = 0; x<num_tk; x++) {
+		current = tkArr+x;
+
+		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
+		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
+
+		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
+		if (current->str_value) {
+			fprintf(fp, " '%s'", current->str_value);
+		}
+		if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
+			fprintf(fp, " - %s", human((current+1)->type));
+		}
+
+		//Don't display the value of 0 except for the write operation
+		if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
+		fprintf(fp, "\"]\n");
+		if (current->next_unconditional)
+			fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
+		if (current->next_if_true)
+			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
+		if (current->next_if_false)
+			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
+		if (showConditionals && current->conditional) {
+			fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->end_true->id);
+			fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->end_false->id);
+		}
+		if (showPairedTokens && current->pair && current == current->pair->senior) {
+			fprintf(fp, "%d -> %d [color=\"green\" dir=\"both\"]\n", current->id, current->pair->junior->id);
+		}
+		if (showPrefixedTokens && current->prefix_member && current == current->prefix_member->senior) {
+			fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_member->senior->id, current->prefix_member->junior->id);
+		}
+	}
+	fprintf(fp, "}\n");
+}
