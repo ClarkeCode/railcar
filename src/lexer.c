@@ -81,6 +81,15 @@ integral_t consumeNumber(FILE* fp, Location* parse_location) {
 	return (integral_t)atoi(buff);
 }
 
+bool checkSequenceErrors(FILE* fp, Location* parse_location, const char* checkSeq) {
+	char c;
+	for (; (c = procureNextChar(fp, parse_location)) != EOF;) {
+		if (c != *checkSeq++) { return false; }
+		if (*checkSeq == '\0') break;
+	}
+	return !(c == EOF);
+}
+
 Program* Railcar_Lexer(char* fileName) {
 	const char ERR_PREFIX[] = "LEXER";
 	FILE* lexf = fopen(fileName, "r");
@@ -156,6 +165,13 @@ Program* Railcar_Lexer(char* fileName) {
 			case 'r': create_token(&num_tokens, tk, HEAD_READ, 0);             break;
 			case 'w':
 				if ((c = procureNextChar(lexf, &parse_location)) == EOF)      reportError(&parse_location, ERR_PREFIX, "Write - expected '0' or '1', got END-OF-FILE\n");
+				if (c == 'a') {
+					if (!checkSequenceErrors(lexf, &parse_location, "gon")) { reportError(&parse_location, ERR_PREFIX, "Malformed 'wagon'\n"); }
+					R_BYTE val = consumeNumber(lexf, &parse_location);
+					create_token(&num_tokens, tk, LOOP_FIXED_AMOUNT, val);
+					tk->loop_counter = -1;
+					break;
+				}
 				if (!(c == '0' || c == '1'))                                  reportError(&parse_location, ERR_PREFIX, "Write - expected '0' or '1', got '%c'\n", c);
 				create_token(&num_tokens, tk, HEAD_WRITE, c == '0' ? 0 : 1);
 				c = '\x3'; //Change c to a non-digit to avoid loop/repeat checks
@@ -188,8 +204,9 @@ Program* Railcar_Lexer(char* fileName) {
 		if (isdigit(c)) {
 			ungetc(c, lexf);
 			R_BYTE value = (R_BYTE)consumeNumber(lexf, &parse_location);
-			if (fpeek(lexf) == ']') create_token(NULL, tk, LOOP_FIXED_AMOUNT, value);
-			else create_token(NULL, tk, REPEAT_MOVE, value);
+			//if (fpeek(lexf) == ']') create_token(NULL, tk, LOOP_FIXED_AMOUNT, value);
+			//else 
+			create_token(NULL, tk, REPEAT_MOVE, value);
 			continue;
 		}
 

@@ -72,6 +72,7 @@ typedef struct Token{
 	int id;
 	TOKEN_TYPE type;
 	int value;
+	int loop_counter;
 	char* str_value;
 	Location loc;
 	struct Token* next_unconditional;

@@ -196,8 +196,9 @@ void Railcar_Parser(Program* prog) {
 		if (current->type == LOOP_FIXED_AMOUNT) {
 			if (!(current+1)->pair)
 				reportError(&current->loc, ERR_PREFIX, "no pair to loop");
-			current->next_if_false = (current+1)->pair->senior;
-			current->next_if_true = current+1;
+			current->next_if_false = (current+1)->pair->senior->next_unconditional;
+			current->next_if_true = (current+1)->pair->junior->next_unconditional;
+			(current+1)->pair->junior->next_unconditional = current;
 		}
 
 		if (current->type == STAKE_FLAG) {

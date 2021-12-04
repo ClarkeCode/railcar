@@ -201,7 +201,7 @@ void Railcar_Simulator(Program* prog) {
 			flags.step_after_line = false;
 		}
 		if (flags.step && flags.step_interactive) {
-			dump_datastack(stdout, &prog->stack);
+			dump_datastack(stdout, prog);
 			printf("\nExecuting: "); dump_token(stdout, current);
 		}
 
@@ -269,10 +269,11 @@ void Railcar_Simulator(Program* prog) {
 			if (flags.step && flags.step_interactive) {printf("At beginning got '%d'\nNext TK: ", result); dump_token(stdout, nextTk);}
 		}
 		if (current->type == LOOP_FIXED_AMOUNT) {
-			bool result = (current->value--) == 0;
+			if (current->loop_counter <= -1) current->loop_counter = current->value;
+			bool result = (current->loop_counter--) == 0;
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
-			if (flags.step && flags.step_interactive) {printf("Loop fixed has '%d' remaining\nNext TK: ", current->value); dump_token(stdout, nextTk);}
+			if (flags.step && flags.step_interactive) {printf("Loop fixed has '%d' remaining\nNext TK: ", current->loop_counter+1); dump_token(stdout, nextTk);}
 		}
 
 		
@@ -319,11 +320,15 @@ void Railcar_Simulator(Program* prog) {
 			printf("-----------\n");
 			char ch; scanf("%c", &ch);
 			if (ch == 'q') break;
+			if (ch == 'c') {
+				flags.step = false;
+				flags.step_after_line = true;
+			}
 		}		
 		if (flags.step && flags.use_ansi) { printf("\x1b[u\x1b[0J"); } //Load cursor position and wipe
 	}
 	if (flags.step) {
 		printf("No more tokens, Final state: \n");
-		dump_datastack(stdout, &prog->stack);
+		dump_datastack(stdout, prog);
 	}
 }
