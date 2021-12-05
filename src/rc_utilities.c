@@ -85,9 +85,16 @@ bool type_in(TOKEN_TYPE t, TOKEN_TYPE* desiredTypes, size_t sz) {
 
 extern Flags flags;
 
+void generate_subgraph_names(int tk_id, char* sg_name, char* sg_true, char* sg_false) {
+	if (sg_name)  sprintf(sg_name,  "conditional_%d", tk_id);
+	if (sg_true)  sprintf(sg_true,  "cluster_%d_T", tk_id);
+	if (sg_false) sprintf(sg_false, "cluster_%d_F", tk_id);
+}
+
 void dump_token_node(FILE* fp, Token* current) {
+	//BEGIN LABEL
 	fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
-	if (current->str_value) {
+	if (current->str_value) { 
 		fprintf(fp, " '%s'", current->str_value);
 	}
 	if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
@@ -95,7 +102,13 @@ void dump_token_node(FILE* fp, Token* current) {
 	}
 	//Don't display the value of 0 except for the write operation
 	if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
-	fprintf(fp, "\"]\n");
+	fprintf(fp, "\"");
+	//END LABEL
+
+	if (current->type == HEAD_READ || current->type == CHECK_ABILITY_TO_MOVE) {
+		fprintf(fp, "shape=diamond");
+	}
+	fprintf(fp, "]\n");
 }
 //Subgraph_name and edge_colour are optional, pass NULL to ignore
 void dump_token_edges(FILE* fp, Token* current) {
@@ -103,7 +116,7 @@ void dump_token_edges(FILE* fp, Token* current) {
 	const bool showPairedTokens = flags.graphviz_pairs;
 	const bool showPrefixedTokens = flags.graphviz_prefixed;
 	if (current->next_unconditional)
-		fprintf(fp, "%d -> %d []\n", current->id, current->next_unconditional->id);
+		fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
 	
 	// if (showConditionals && current->conditional) {
 	// 	fprintf(fp, "%d -> %d [label=\"EndTrue\"", current->id, current->conditional->end_true->id);
@@ -116,81 +129,80 @@ void dump_token_edges(FILE* fp, Token* current) {
 		fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_member->senior->id, current->prefix_member->junior->id);
 	}
 
-	// if (current->conditional) { //opens a conditional branch
-	// 	char sg_t_name[128] = "";
-	// 	char sg_f_name[128] = "";
-	// 	sprintf(sg_t_name, "cluster_%d_T", current->id);
-	// 	sprintf(sg_f_name, "cluster_%d_T", current->id);
-	// 	if (current->next_if_false) {
-	// 		fprintf(fp, "%d -> %d [label=\"False\" lhead=%s color=%s]\n", current->id, current->next_if_false->id, sg_f_name, "red");
-	// 	}
-	// 	if (current->next_if_true) {
-	// 		fprintf(fp, "%d -> %d [label=\"True\" lhead=%s color=%s]\n", current->id, current->next_if_true->id, sg_t_name, "green");
-	// 	}
-	// }
-	// else {
+	if (current->conditional) { //opens a conditional branch
+		char sg_t_name[128] = "";
+		char sg_f_name[128] = "";
+		generate_subgraph_names(current->id, NULL, sg_t_name, sg_f_name);
+
+		if (current->next_if_false) {
+			fprintf(fp, "%d -> %d [label=\"False\" lhead=%s color=%s]\n", current->id, current->next_if_false->id, sg_f_name, "red");
+		}
+		if (current->next_if_true) {
+			fprintf(fp, "%d -> %d [label=\"True\" lhead=%s color=%s]\n", current->id, current->next_if_true->id, sg_t_name, "green");
+		}
+	}
+	else {
 		if (current->next_if_true)
 			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
 		if (current->next_if_false)
 			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
-	// }
+	}
 }
 
-void dump_conditional(FILE* fp, Token* tkArr, const char* named_sg) {
-	Token* current = tkArr;
+
+Token* dump_token_until_stopper(FILE* fp, Token* current, Token* stopper);//Forward declaration
+
+
+
+Token* dump_conditional(FILE* fp, Token* current) {
 	char sg_name[128] = "";
 	char sg_t_name[128] = "";
 	char sg_f_name[128] = "";
-	if (named_sg) {
-		strcpy(sg_name, named_sg);
-	}
-	else {
-		sprintf(sg_name, "conditional_%d", current->id);
-	}
-	sprintf(sg_t_name, "cluster_%d_T", current->id);
-	sprintf(sg_f_name, "cluster_%d_T", current->id);
+	
+	generate_subgraph_names(current->id, sg_name, sg_t_name, sg_f_name);
 
 
 	fprintf(fp, "subgraph %s {\n", sg_name);
 	//list tokens until end or
 	//if token that creates subgraph
-
 	dump_token_node(fp, current);
-
+	{
+		fprintf(fp, "\tsubgraph %s {\ncolor=red;\nlabel=\"False\";\n", sg_f_name);
+		dump_token_until_stopper(fp, current->next_if_false, current->conditional->end_false+1);
+		fprintf(fp, "\t}\n");
+	}
+	{
+		fprintf(fp, "\tsubgraph %s {\ncolor=green;\nlabel=\"True\";\n", sg_t_name);
+		current = dump_token_until_stopper(fp, current->next_if_true, current->conditional->end_true+1);
+		fprintf(fp, "\t}\n");
+	}
+	
 	fprintf(fp, "}\n");
+	return current;
 }
 
-void dump_subgraph(FILE* fp, Token* tkArr, Token* stopper, const char* named_sg) {
-	Token* current = tkArr;
-	char sg_name[128] = "";
-	char sg_t_name[128] = "";
-	char sg_f_name[128] = "";
-	if (named_sg) {
-		strcpy(sg_name, named_sg);
+
+//Returned pointer will point to the provided stopper
+Token* dump_token_until_stopper(FILE* fp, Token* current, Token* stopper) {
+	const bool showPrefixedTokens = flags.graphviz_prefixed;
+	const bool showConditionals = flags.graphviz_conditionals;
+	do {
+
+		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
+		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
+
+
+		if (current->type == HEAD_READ) {
+			current = dump_conditional(fp, current)-1;
+		}
+		else {
+			dump_token_node(fp, current);
+		}
+		
 	}
-	else {
-		sprintf(sg_name, "conditional_%d", current->id);
-	}
-	sprintf(sg_t_name, "cluster_%d_T", current->id);
-	sprintf(sg_f_name, "cluster_%d_T", current->id);
-
-
-	fprintf(fp, "subgraph %s {\n", sg_name);
-	//list tokens until end or
-	//if token that creates subgraph
-
-	if (current->conditional) {
-
-		// dump_subgraph(fp, tkArr, );
-	}
-
-	fprintf(fp, "}\n");
+	while(++current != stopper);
+	return current;
 }
-
-//go through tokens
-//	recursively dump subgraphs to get the structure
-//	then list edges
-//		if the edge goes to the beginning of a subgraph, set lhead to the name of the subgraph
 
 void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	const bool showConditionals = flags.graphviz_conditionals;
@@ -202,17 +214,13 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	Token* current = tkArr;
 	Token* stopper = tkArr+num_tk;
 
-	do {
+	dump_token_until_stopper(fp, current, stopper);
 
+	do {
 		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
 		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
-
-		//Label for node
-		
-		dump_token_node(fp, current);
 		dump_token_edges(fp, current);
-		
-	}
-	while(++current != stopper);
+	} while (++current != stopper);
+
 	fprintf(fp, "}\n");
 }
