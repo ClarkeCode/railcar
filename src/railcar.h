@@ -29,9 +29,11 @@ typedef enum {
 	GOTO_BLOCK_START,
 	GOTO_BLOCK_END,
 
+	//TODO: Remove LOOP_E/LOOP_B in favour of using ?>($)(#) / ?<($)(#)
 	LOOP_UNTIL_END,
 	LOOP_UNTIL_BEGINNING,
 	LOOP_FIXED_AMOUNT,
+	LOOP_DYNAMIC_AMOUNT,
 
 	STAKE_FLAG,
 	RETURN_FLAG,

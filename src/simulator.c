@@ -161,7 +161,7 @@ void Railcar_Simulator(Program* prog) {
 			printf("\nExecuting: "); dump_token(stdout, current);
 		}
 
-		assert(NUM_TOKEN_TYPE == 28 && "Unhandled token");
+		assert(NUM_TOKEN_TYPE == 29 && "Unhandled token");
 
 		
 		if (current->type == STAKE_FLAG) {
@@ -230,6 +230,13 @@ void Railcar_Simulator(Program* prog) {
 			if (result) nextTk = current->next_if_true;
 			else        nextTk = current->next_if_false;
 			if (flags.step && flags.step_interactive) {printf("Loop fixed has '%d' remaining\nNext TK: ", current->loop_counter+1); dump_token(stdout, nextTk);}
+		}
+		if (current->type == LOOP_DYNAMIC_AMOUNT) {
+			if (current->loop_counter <= -1) current->loop_counter = *selectedByte;
+			bool result = (current->loop_counter--) == 0;
+			if (result) nextTk = current->next_if_true;
+			else        nextTk = current->next_if_false;
+			if (flags.step && flags.step_interactive) {printf("Loop dynamic has '%d' remaining\nNext TK: ", current->loop_counter+1); dump_token(stdout, nextTk);}
 		}
 
 		

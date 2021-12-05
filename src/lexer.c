@@ -141,7 +141,7 @@ Program* Railcar_Lexer(char* fileName) {
 
 	//Get instructions
 	while ((c = procureNextChar(lexf, &parse_location)) != EOF) {
-		assert(NUM_TOKEN_TYPE == 28 && "Unhandled Token");
+		assert(NUM_TOKEN_TYPE == 29 && "Unhandled Token");
 		Token* tk = tokens+num_tokens;
 		tk->loc = parse_location;
 
@@ -167,8 +167,16 @@ Program* Railcar_Lexer(char* fileName) {
 				if ((c = procureNextChar(lexf, &parse_location)) == EOF)      reportError(&parse_location, ERR_PREFIX, "Write - expected '0' or '1', got END-OF-FILE\n");
 				if (c == 'a') {
 					if (!checkSequenceErrors(lexf, &parse_location, "gon")) { reportError(&parse_location, ERR_PREFIX, "Malformed 'wagon'\n"); }
-					R_BYTE val = consumeNumber(lexf, &parse_location);
-					create_token(&num_tokens, tk, LOOP_FIXED_AMOUNT, val);
+					char nextC = fpeek(lexf);
+					if (nextC == '?') {
+						procureNextChar(lexf, &parse_location);
+						create_token(&num_tokens, tk, LOOP_DYNAMIC_AMOUNT, 0);
+					}
+					else {
+						R_BYTE val = consumeNumber(lexf, &parse_location);
+						create_token(&num_tokens, tk, LOOP_FIXED_AMOUNT, val);
+					}
+					
 					tk->loop_counter = -1;
 					break;
 				}

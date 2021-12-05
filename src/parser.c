@@ -93,7 +93,7 @@ void Railcar_Parser(Program* prog) {
 	//TODO: add error reporting function and syntax checking to call
 
 	//TODO: lying here, need to handle all existing tokens
-	assert(NUM_TOKEN_TYPE == 28 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 29 && "Unhandled Token");
 
 	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK};
 	TOKEN_TYPE pairedcloser[] = {CLOSE_BLOCK};
@@ -193,7 +193,7 @@ void Railcar_Parser(Program* prog) {
 			current->next_if_true = find_next_token_of_type(current, stopper, CLOSE_BLOCK);
 			current->next_if_false = current->next_if_true->pair->senior->next_unconditional;
 		}
-		if (current->type == LOOP_FIXED_AMOUNT) {
+		if (current->type == LOOP_FIXED_AMOUNT || current->type == LOOP_DYNAMIC_AMOUNT) {
 			if (!(current+1)->pair)
 				reportError(&current->loc, ERR_PREFIX, "no pair to loop");
 			current->next_if_false = (current+1)->pair->senior->next_unconditional;

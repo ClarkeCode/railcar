@@ -29,7 +29,7 @@ void shellEcho(const char* command) {
 
 
 char* human(TOKEN_TYPE ttype) {
-	assert(NUM_TOKEN_TYPE == 28 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 29 && "Unhandled Token");
 
 	switch (ttype) {
 		case NO_OPERATION: return "NOP"; break;
@@ -60,6 +60,7 @@ char* human(TOKEN_TYPE ttype) {
 		case LOOP_UNTIL_END: return "LOOP_E"; break;
 		case LOOP_UNTIL_BEGINNING: return "LOOP_B"; break;
 		case LOOP_FIXED_AMOUNT: return "LOOP_FIXED_AMOUNT"; break;
+		case LOOP_DYNAMIC_AMOUNT: return "LOOP_DYNAMIC_AMOUNT"; break;
 
 		case STAKE_FLAG: return "STAKE_FLAG"; break;
 		case RETURN_FLAG: return "RETURN_FLAG"; break;
