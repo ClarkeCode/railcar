@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <stdarg.h> //For variadic functions
+#include <string.h>
 
 //Note: prefix is optional, pass NULL to ignore
 void reportError(Location* errorLoc, const char* prefix, const char* fmessage, ...) {
@@ -83,6 +84,114 @@ bool type_in(TOKEN_TYPE t, TOKEN_TYPE* desiredTypes, size_t sz) {
 
 
 extern Flags flags;
+
+void dump_token_node(FILE* fp, Token* current) {
+	fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
+	if (current->str_value) {
+		fprintf(fp, " '%s'", current->str_value);
+	}
+	if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
+		fprintf(fp, " - %s", human((current+1)->type));
+	}
+	//Don't display the value of 0 except for the write operation
+	if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
+	fprintf(fp, "\"]\n");
+}
+//Subgraph_name and edge_colour are optional, pass NULL to ignore
+void dump_token_edges(FILE* fp, Token* current) {
+	const bool showConditionals = flags.graphviz_conditionals;
+	const bool showPairedTokens = flags.graphviz_pairs;
+	const bool showPrefixedTokens = flags.graphviz_prefixed;
+	if (current->next_unconditional)
+		fprintf(fp, "%d -> %d []\n", current->id, current->next_unconditional->id);
+	
+	// if (showConditionals && current->conditional) {
+	// 	fprintf(fp, "%d -> %d [label=\"EndTrue\"", current->id, current->conditional->end_true->id);
+	// 	fprintf(fp, "%d -> %d [label=\"EndFalse\"", current->id, current->conditional->end_false->id);
+	// }
+	if (showPairedTokens && current->pair && current == current->pair->senior) {
+		fprintf(fp, "%d -> %d [color=\"green\" dir=\"both\"]\n", current->id, current->pair->junior->id);
+	}
+	if (showPrefixedTokens && current->prefix_member && current == current->prefix_member->senior) {
+		fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_member->senior->id, current->prefix_member->junior->id);
+	}
+
+	// if (current->conditional) { //opens a conditional branch
+	// 	char sg_t_name[128] = "";
+	// 	char sg_f_name[128] = "";
+	// 	sprintf(sg_t_name, "cluster_%d_T", current->id);
+	// 	sprintf(sg_f_name, "cluster_%d_T", current->id);
+	// 	if (current->next_if_false) {
+	// 		fprintf(fp, "%d -> %d [label=\"False\" lhead=%s color=%s]\n", current->id, current->next_if_false->id, sg_f_name, "red");
+	// 	}
+	// 	if (current->next_if_true) {
+	// 		fprintf(fp, "%d -> %d [label=\"True\" lhead=%s color=%s]\n", current->id, current->next_if_true->id, sg_t_name, "green");
+	// 	}
+	// }
+	// else {
+		if (current->next_if_true)
+			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
+		if (current->next_if_false)
+			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
+	// }
+}
+
+void dump_conditional(FILE* fp, Token* tkArr, const char* named_sg) {
+	Token* current = tkArr;
+	char sg_name[128] = "";
+	char sg_t_name[128] = "";
+	char sg_f_name[128] = "";
+	if (named_sg) {
+		strcpy(sg_name, named_sg);
+	}
+	else {
+		sprintf(sg_name, "conditional_%d", current->id);
+	}
+	sprintf(sg_t_name, "cluster_%d_T", current->id);
+	sprintf(sg_f_name, "cluster_%d_T", current->id);
+
+
+	fprintf(fp, "subgraph %s {\n", sg_name);
+	//list tokens until end or
+	//if token that creates subgraph
+
+	dump_token_node(fp, current);
+
+	fprintf(fp, "}\n");
+}
+
+void dump_subgraph(FILE* fp, Token* tkArr, Token* stopper, const char* named_sg) {
+	Token* current = tkArr;
+	char sg_name[128] = "";
+	char sg_t_name[128] = "";
+	char sg_f_name[128] = "";
+	if (named_sg) {
+		strcpy(sg_name, named_sg);
+	}
+	else {
+		sprintf(sg_name, "conditional_%d", current->id);
+	}
+	sprintf(sg_t_name, "cluster_%d_T", current->id);
+	sprintf(sg_f_name, "cluster_%d_T", current->id);
+
+
+	fprintf(fp, "subgraph %s {\n", sg_name);
+	//list tokens until end or
+	//if token that creates subgraph
+
+	if (current->conditional) {
+
+		// dump_subgraph(fp, tkArr, );
+	}
+
+	fprintf(fp, "}\n");
+}
+
+//go through tokens
+//	recursively dump subgraphs to get the structure
+//	then list edges
+//		if the edge goes to the beginning of a subgraph, set lhead to the name of the subgraph
+
 void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	const bool showConditionals = flags.graphviz_conditionals;
 	const bool showPairedTokens = flags.graphviz_pairs;
@@ -90,54 +199,20 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 	fprintf(fp, "digraph {\n");
 	fprintf(fp, "compound=true;\n");
 	// fprintf(fp, "\tlayout=neato;\n");
-	Token* current;
+	Token* current = tkArr;
+	Token* stopper = tkArr+num_tk;
 
-	for (size_t x = 0, block_num = 0; x<num_tk; x++) {
-		current = tkArr+x;
-		if (current->type == OPEN_BLOCK) {
-			fprintf(fp, "subgraph cluster_%lu{\ncolor=blue;\nlabel=\"Block #%lu\";\n", block_num, block_num);
-			for(Token* sub = current; sub <= current->pair->junior; sub++) {
-				fprintf(fp, "%lu ", sub->id);
-			}
-			fprintf(fp, ";\n}\n");
-			block_num++;
-		}
-
-	}
-
-	for (size_t x = 0; x<num_tk; x++) {
-		current = tkArr+x;
+	do {
 
 		if (!showConditionals && (current->type == OPEN_CONDITIONAL || current->type == CLOSE_CONDITIONAL)) continue;
 		if (!showPrefixedTokens && current->prefix_member && current == current->prefix_member->junior) continue;
 
-		fprintf(fp, "%d [label=\"(%d) %s", current->id, current->id, human(current->type));
-		if (current->str_value) {
-			fprintf(fp, " '%s'", current->str_value);
-		}
-		if (current->type == CHECK_ABILITY_TO_MOVE || current->type == REPEAT_MOVE_MAX || current->type == REPEAT_MOVE) {
-			fprintf(fp, " - %s", human((current+1)->type));
-		}
-
-		//Don't display the value of 0 except for the write operation
-		if (current->value != 0 || current->type == HEAD_WRITE) { fprintf(fp, ": %d", current->value); }
-		fprintf(fp, "\"]\n");
-		if (current->next_unconditional)
-			fprintf(fp, "%d -> %d\n", current->id, current->next_unconditional->id);
-		if (current->next_if_true)
-			fprintf(fp, "%d -> %d [label=\"True\"]\n", current->id, current->next_if_true->id);
-		if (current->next_if_false)
-			fprintf(fp, "%d -> %d [label=\"False\"]\n", current->id, current->next_if_false->id);
-		if (showConditionals && current->conditional) {
-			fprintf(fp, "%d -> %d [label=\"EndTrue\"]\n", current->id, current->conditional->end_true->id);
-			fprintf(fp, "%d -> %d [label=\"EndFalse\"]\n", current->id, current->conditional->end_false->id);
-		}
-		if (showPairedTokens && current->pair && current == current->pair->senior) {
-			fprintf(fp, "%d -> %d [color=\"green\" dir=\"both\"]\n", current->id, current->pair->junior->id);
-		}
-		if (showPrefixedTokens && current->prefix_member && current == current->prefix_member->senior) {
-			fprintf(fp, "%d -> %d [color=\"orange\"]\n", current->prefix_member->senior->id, current->prefix_member->junior->id);
-		}
+		//Label for node
+		
+		dump_token_node(fp, current);
+		dump_token_edges(fp, current);
+		
 	}
+	while(++current != stopper);
 	fprintf(fp, "}\n");
 }
