@@ -93,7 +93,7 @@ void Railcar_Parser(Program* prog) {
 	//TODO: add error reporting function and syntax checking to call
 
 	//TODO: lying here, need to handle all existing tokens
-	assert(NUM_TOKEN_TYPE == 29 && "Unhandled Token");
+	assert(NUM_TOKEN_TYPE == 30 && "Unhandled Token");
 
 	TOKEN_TYPE pairedopener[] = {OPEN_BLOCK};
 	TOKEN_TYPE pairedcloser[] = {CLOSE_BLOCK};
@@ -171,7 +171,8 @@ void Railcar_Parser(Program* prog) {
 		CLOSE_CONDITIONAL,
 		PRINT_BYTE_AS_CHAR,
 		PRINT_BYTE_AS_NUM,
-		STRING
+		STRING,
+		INSERT_DATA_ITEM
 	};
 	for (Token* current = tokens; current < stopper; current++) {
 		//TODO: WARNING - does not properly check validity of lookahead/behind

@@ -161,7 +161,7 @@ void Railcar_Simulator(Program* prog) {
 			printf("\nExecuting: "); dump_token(stdout, current);
 		}
 
-		assert(NUM_TOKEN_TYPE == 29 && "Unhandled token");
+		assert(NUM_TOKEN_TYPE == 30 && "Unhandled token");
 
 		
 		if (current->type == STAKE_FLAG) {
@@ -239,6 +239,7 @@ void Railcar_Simulator(Program* prog) {
 			if (flags.step && flags.step_interactive) {printf("Loop dynamic has '%d' remaining\nNext TK: ", current->loop_counter+1); dump_token(stdout, nextTk);}
 		}
 
+		if (current->type == INSERT_DATA_ITEM) { prog->stack.sz_content++; prog->stack.max_dimensions.y++; }
 		
 		if (current->type == PRINT_BYTE_AS_CHAR) { printf("%c", *selectedByte); }
 		if (current->type == PRINT_BYTE_AS_NUM) { printf("%d", *selectedByte); }
