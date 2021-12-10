@@ -227,3 +227,54 @@ void dump_tokens_to_dotfile(FILE* fp, Token* tkArr, size_t num_tk) {
 
 	fprintf(fp, "}\n");
 }
+
+
+
+
+
+
+
+
+
+
+
+#define RC_DATASTRUCTURE_DEFAULT_CAPACITY 16
+typedef unsigned char BYTE_;
+
+void stackPush(Stack* stack_p, void* newElement) {
+	if (stack_p->size == stack_p->_capacity-1) {
+		stack_p->_capacity *= 2;
+		stack_p->_data = realloc(stack_p->_data, stack_p->_capacity * 8);
+	}
+
+	void* newPlace = (BYTE_*)stack_p->_data + stack_p->size;
+	memcpy(newPlace, newElement, stack_p->_element_size);
+	stack_p->size++;
+}
+void* stackTop(Stack* stack_p) {
+	if (stack_p->size == 0) return NULL;
+	return (BYTE_*)stack_p->_data + (stack_p->size - 1);
+}
+void* stackPop(Stack* stack_p) {
+	void* oldTop = stackTop(stack_p);
+	stack_p->size--;
+	return oldTop;
+}
+
+//Public
+Stack* initializeStack(size_t elementSize) {
+	Stack* stack = calloc(1, elementSize);
+	stack->_capacity = RC_DATASTRUCTURE_DEFAULT_CAPACITY;
+	stack->_data = calloc(RC_DATASTRUCTURE_DEFAULT_CAPACITY, elementSize);
+	stack->_element_size = elementSize;
+
+	stack->push  = &stackPush;
+	stack->top   = &stackTop;
+	stack->pop   = &stackPop;
+
+	return stack;
+}
+void freeStack(Stack* stack_p) {
+	if (stack_p->_data) free(stack_p->_data);
+	if (stack_p)        free(stack_p);
+}
