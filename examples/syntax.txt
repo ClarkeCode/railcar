@@ -1,0 +1,41 @@
+
+
+o===o   //Railcar marker: separates initial data state from instructions
+/       //Signals the beginning of a comment
+- //No operation
+
+> //Move head right
+< //Move head left
+^ //Move head up
+v //Move head down
+
+<number> <movement indicator> //Move <number> times in specified direction
+~ <movement indicator> //Move in specified direction a number of times equal to the numeric value of selected byte
+! <movement indicator> //Move in the specified direction until no more valid movement is left
+? <movement indicator> <false branch> <true branch> //Check if the head can make a valid move in specified direction, execute true branch if it can move, false otherwise
+
+w0 //Write a 0 at the current selected bit
+w1 //Write a 1 at the current selected bit
+
+r <false branch> <true branch> //Reads current bit, goes to false if 0, go to true if 1
+
+( //Opens a conditional branch
+) //Closes a conditional branch
+[ //Opens a code block
+] //Closes a code block
+# //Go to the instruction at the beginning of current block
+$ //Go to the instruction after the current block
+
+wagon <number> <block> //Loop instructions within <block> <number> times
+wagon ? <block> //Loop instructions within block a number of times equal to the numeric value of the selected byte
+
+"<characters>" //Signifies a string literal
+& <string> //Stake a flag identified by <string> at current head position
+@ <string> //Jump head to flag position specified by <string>
+
+* //Insert a blank item at the bottom of the datastack
+
+
+conductor <string> [<instructions>] //Execute instructions within the colons whenever <string> occurs
+
+
