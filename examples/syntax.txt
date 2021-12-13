@@ -38,4 +38,5 @@ wagon ? <block> //Loop instructions within block a number of times equal to the 
 
 conductor <string> [<instructions>] //Execute instructions within the colons whenever <string> occurs
 
-
+c //Prints selected byte as char
+d //Prints selected byte as number
