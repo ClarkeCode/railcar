@@ -30,7 +30,36 @@ void show_usage(FILE* fp) {
 	fprintf(fp, "	--no-ansi      //turn off all use of ANSI escape codes\n");
 }
 
-int main(int argc, char* argv[]) {
+bool isNum(void* a, void* b) {
+	return (*(int*)a) == (*(int*)b);
+}
+int main(int argc, char* argv[]){
+	Deque* deque = initializeDeque(sizeof(int));
+
+	int i = 12;
+	deque->insert(deque, &i, 0);
+	i = 13;
+	deque->insert(deque, &i, 1);
+	i = 14;
+	deque->insert(deque, &i, 0);
+
+	deque->erase_front(deque);
+	deque->erase_back(deque);
+
+	i = 17;
+	deque->push_front(deque, &i);
+	i = 22;
+	deque->push_back(deque, &i);
+	
+
+	printf("DQ: %d %d\n", DQ_UNPACK(int) deque->front(deque), DQ_UNPACK(int) deque->back(deque));
+	int y = 14;
+	printf("14 = %d, 22 = %d\n", deque->in(deque, &y, isNum), deque->in(deque, &i, isNum));
+
+	freeDeque(deque);
+}
+
+int main2(int argc, char* argv[]) {
 	argc--; argv++; //Discard own program name
 
 	char* fileName = NULL;
