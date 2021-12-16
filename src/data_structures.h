@@ -1,6 +1,7 @@
 #ifndef RAILCAR_DATASTRUCTURES
 #define RAILCAR_DATASTRUCTURES
 #include <stdbool.h>
+#include <string.h>
 
 //START: Stack data structure
 #define SK_UNPACK(sk_ele_t) *(sk_ele_t*) 

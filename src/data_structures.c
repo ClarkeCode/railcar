@@ -1,5 +1,4 @@
 #include "data_structures.h"
-#include <string.h>
 
 #define RC_DATASTRUCTURE_DEFAULT_CAPACITY 16
 typedef unsigned char BYTE_;
@@ -8,7 +7,7 @@ typedef unsigned char BYTE_;
 void stackPush(Stack* stack_p, void* newElement) {
 	if (stack_p->size == stack_p->_capacity-1) {
 		stack_p->_capacity *= 2;
-		stack_p->_data = realloc(stack_p->_data, stack_p->_capacity * 8);
+		stack_p->_data = (void*)realloc(stack_p->_data, stack_p->_capacity * 8);
 	}
 
 	void* newPlace = (BYTE_*)stack_p->_data + stack_p->size;
@@ -27,9 +26,9 @@ void* stackPop(Stack* stack_p) {
 
 //Public
 Stack* initializeStack(size_t elementSize) {
-	Stack* stack = calloc(1, sizeof(Stack));
+	Stack* stack = (void*)calloc(1, sizeof(Stack));
 	stack->_capacity = RC_DATASTRUCTURE_DEFAULT_CAPACITY;
-	stack->_data = calloc(RC_DATASTRUCTURE_DEFAULT_CAPACITY, elementSize);
+	stack->_data = (void*)calloc(RC_DATASTRUCTURE_DEFAULT_CAPACITY, elementSize);
 	stack->_element_size = elementSize;
 
 	stack->push = &stackPush;
@@ -54,7 +53,7 @@ void freeStack(Stack* stack_p) {
 void _dequeConditionalResize(Deque* deque) {
 	if (deque->size == deque->_capacity) {
 		deque->_capacity *= 2;
-		deque->_data = realloc(deque->_data, deque->_capacity);
+		deque->_data = (void*)realloc(deque->_data, deque->_capacity);
 	}
 }
 
@@ -119,10 +118,10 @@ void* dequeFind(Deque* deque, void* searchItem, bool(*equalityFunc)(void*, void*
 }
 
 Deque* initializeDeque(size_t elementSize) {
-	Deque* deque = calloc(1, sizeof(Deque));
+	Deque* deque = (void*)calloc(1, sizeof(Deque));
 	deque->_capacity = RC_DATASTRUCTURE_DEFAULT_CAPACITY;
 	deque->_element_size = elementSize;
-	deque->_data = calloc(RC_DATASTRUCTURE_DEFAULT_CAPACITY, elementSize);
+	deque->_data = (void*)calloc(RC_DATASTRUCTURE_DEFAULT_CAPACITY, elementSize);
 
 	//methods
 	deque->insert = &dequeInsert;
