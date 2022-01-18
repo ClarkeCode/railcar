@@ -4,31 +4,33 @@
 typedef unsigned char BYTE_;
 
 //START: Stack data structure
-void stackPush(Stack* stack_p, void* newElement) {
-	if (stack_p->size == stack_p->_capacity-1) {
-		stack_p->_capacity *= 2;
-		stack_p->_data = (void*)realloc(stack_p->_data, stack_p->_capacity * 8);
-	}
+void stackPush(Stack* stack, void* newElement) {
+	
+	Node* wrapper = (void*) calloc(1, sizeof(Node));
+	wrapper->_data = newElement;
+	wrapper->parent = stack->_stack;
+	stack->_stack = wrapper;
 
-	void* newPlace = (BYTE_*)stack_p->_data + stack_p->size;
-	memcpy(newPlace, newElement, stack_p->_element_size);
-	stack_p->size++;
+	stack->size++;
 }
-void* stackTop(Stack* stack_p) {
-	if (stack_p->size == 0) return NULL;
-	return (BYTE_*)stack_p->_data + (stack_p->size - 1)*stack_p->_element_size;
+
+void* stackTop(Stack* stack) {
+	if (stack->size == 0) return NULL;
+	return stack->_stack->_data;
 }
-void* stackPop(Stack* stack_p) {
-	void* oldTop = stackTop(stack_p);
-	stack_p->size--;
-	return oldTop;
+
+void* stackPop(Stack* stack) {
+	Node* oldTop = stack->_stack;
+	void* content = oldTop->_data;
+	stack->size--;
+	if (oldTop) free(oldTop);
+	return content;
 }
 
 //Public
 Stack* initializeStack(size_t elementSize) {
 	Stack* stack = (void*)calloc(1, sizeof(Stack));
-	stack->_capacity = RC_DATASTRUCTURE_DEFAULT_CAPACITY;
-	stack->_data = (void*)calloc(RC_DATASTRUCTURE_DEFAULT_CAPACITY, elementSize);
+	// stack->_stack = NULL;
 	stack->_element_size = elementSize;
 
 	stack->push = &stackPush;
@@ -38,7 +40,7 @@ Stack* initializeStack(size_t elementSize) {
 	return stack;
 }
 void freeStack(Stack* stack_p) {
-	if (stack_p && stack_p->_data) free(stack_p->_data);
+	// if (stack_p && stack_p->_data) free(stack_p->_data);
 	if (stack_p)                   free(stack_p);
 }
 //END: Stack data structure

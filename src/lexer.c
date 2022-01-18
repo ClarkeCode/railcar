@@ -97,10 +97,11 @@ Program* Railcar_Lexer(char* fileName) {
 
 	Program* program = calloc(1, sizeof(Program));
 	//TODO: arbitrary instruction length
-	Token* tokens = calloc(PROGRAM_MAX_INSTRUCTIONS, sizeof(Token));
+	Token* tokens = calloc(PROGRAM_MAX_TOKENS, sizeof(Token));
 	size_t num_tokens = 0;
 
 	Location parse_location = {.file = fileName, .line = 0, .character = -1};
+	//TODO: use a stack to handle paired tokens
 
 	char c;
 
@@ -224,8 +225,8 @@ Program* Railcar_Lexer(char* fileName) {
 	}
 	create_token(&num_tokens, tokens+num_tokens, END_OF_PROGRAM, 0);
 
-	program->instructions = tokens;
-	program->sz_instructions = num_tokens;
+	program->tokens = tokens;
+	program->sz_tokens = num_tokens;
 	fclose(lexf);
 
 	return program;

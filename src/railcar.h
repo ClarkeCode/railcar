@@ -79,16 +79,6 @@ typedef struct Token{
 	int loop_counter;
 	char* str_value;
 	Location loc;
-	struct Token* next_unconditional;
-	struct Token* next_if_true;
-	struct Token* next_if_false;
-
-	BidirectionalLinkage* prefix_member; //Senior is the modifier token ie: repeat/max_repeat, Junior is the modified token ie: up/left
-	
-	BidirectionalLinkage* pair; //Senior is the opening token ie: '[', Junior is the closing token ie: ']'
-
-	ConditionalBranch* conditional; //Will be not NULL if this token creates a branch
-	ConditionalBranch* branchMember; //If the token belongs to a branch, this points to the info
 } Token;
 
 typedef struct {
@@ -108,20 +98,7 @@ typedef struct HLocationMapping{
 	HeadLocation value;
 }HLocationMapping;
 
-#define PROGRAM_MAX_INSTRUCTIONS 512
-typedef struct Program{
-	DataStack stack;
-	Token* instructions;
-	size_t sz_instructions;
 
-	HLocationMapping flag_values[128];
-} Program;
-
-Program* Railcar_Lexer(char* fileName);
-
-void Railcar_Parser(Program* prog);
-
-void Railcar_Simulator(Program* prog);
 
 
 typedef struct {
@@ -140,4 +117,69 @@ typedef struct {
 	bool graphviz_pairs;
 	bool graphviz_prefixed;
 } Flags;
+
+
+//FUNCTION_DEFINITION
+//FUNCTION_CALL
+
+typedef enum {
+	BLOCK,
+	INSTRUCTION,
+	
+	NUM_AST_TYPE
+}
+AST_TYPE;
+
+struct Instruction;
+typedef struct BlockContext {
+	struct Instruction* senior;
+	struct Instruction* junior;
+	struct Instruction* firstInstruction;
+	struct Instruction* mostRecentAddition;
+} BlockContext;
+
+typedef struct Instruction{
+	AST_TYPE type;
+
+	size_t block_id;
+	//Will point to the context of the most specific block
+	BlockContext* block_context;
+	
+	//Contains the Token information from the lexer
+	Token* tk;
+
+	//For normal commands, unconditional points to next instruction
+	//For loops, unconditional and false point to next instruction after loop
+	//    if_true points to the beginning of the looped block
+	//For commands that create branches, if_true point to next instruction if fulfilled,
+	//    and if_false points to next instruction if not fulfilled
+	//    one branch gets chosen to be executed depending on the nature of the branching command
+	//    after the chosen branch is executed, they will follow unconditional to the first instruction after the branches
+	struct Instruction* next_unconditional;
+	struct Instruction* next_if_true;
+	struct Instruction* next_if_false;
+
+} Instruction;
+
+
+
+
+#define PROGRAM_MAX_TOKENS 512
+#define PROGRAM_MAX_INSTRUCTIONS 512
+typedef struct Program{
+	DataStack stack;
+	Token* tokens;
+	size_t sz_tokens;
+
+	Instruction* instruction_tree;
+
+	HLocationMapping flag_values[128];
+} Program;
+
+Program* Railcar_Lexer(char* fileName);
+
+void Railcar_Parser(Program* prog);
+
+void Railcar_Simulator(Program* prog);
+
 #endif

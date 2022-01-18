@@ -30,36 +30,7 @@ void show_usage(FILE* fp) {
 	fprintf(fp, "	--no-ansi      //turn off all use of ANSI escape codes\n");
 }
 
-bool isNum(void* a, void* b) {
-	return (*(int*)a) == (*(int*)b);
-}
-int main(int argc, char* argv[]){
-	Deque* deque = initializeDeque(sizeof(int));
-
-	int i = 12;
-	deque->insert(deque, &i, 0);
-	i = 13;
-	deque->insert(deque, &i, 1);
-	i = 14;
-	deque->insert(deque, &i, 0);
-
-	deque->erase_front(deque);
-	deque->erase_back(deque);
-
-	i = 17;
-	deque->push_front(deque, &i);
-	i = 22;
-	deque->push_back(deque, &i);
-	
-
-	printf("DQ: %d %d\n", DQ_UNPACK(int) deque->front(deque), DQ_UNPACK(int) deque->back(deque));
-	int y = 14;
-	printf("14 = %d, 22 = %d\n", deque->in(deque, &y, isNum), deque->in(deque, &i, isNum));
-
-	freeDeque(deque);
-}
-
-int main2(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
 	argc--; argv++; //Discard own program name
 
 	char* fileName = NULL;
@@ -103,15 +74,17 @@ int main2(int argc, char* argv[]) {
 	//Lexer
 	if (flags.show_lex) ("Lexing: %s\n", fileName);
 	Program* prog = Railcar_Lexer(fileName);
-	if (flags.show_lex) dump_program(stdout, prog);
+	// if (flags.show_lex) dump_program(stdout, prog);
 	
 	//Parser
 	Railcar_Parser(prog);
-	if (flags.show_parse) dump_program(stdout, prog);
+	// if (flags.show_parse) dump_program(stdout, prog);
 
 	if (flags.graphviz) {
 		FILE* fp = fopen("output.dot", "w");
-		if (fp) dump_tokens_to_dotfile(fp, prog->instructions, prog->sz_instructions);
+		if (fp)
+			// dump_tokens_to_dotfile(fp, prog->instructions, prog->sz_instructions);
+			dump_ast_to_dotfile(fp, prog->instruction_tree);
 		fclose(fp);
 
 		shellEcho(".\\vendors\\Graphviz\\bin\\dot.exe -Tpng output.dot -O");
@@ -123,7 +96,7 @@ int main2(int argc, char* argv[]) {
 		printf("Stepper\n");
 		// if (flags.use_ansi) { printf("\x1b[s***"); }//Save cursor position
 	}
-	Railcar_Simulator(prog);
+	// Railcar_Simulator(prog);
 
 	if (false) {
 		//TODO: work on use of ANSI escapes

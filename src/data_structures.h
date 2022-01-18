@@ -3,6 +3,12 @@
 #include <stdbool.h>
 #include <string.h>
 
+typedef struct _NODE {
+	struct _NODE* parent;
+	struct _NODE* child;
+	void* _data;
+} Node;
+
 //START: Stack data structure
 #define SK_UNPACK(sk_ele_t) *(sk_ele_t*) 
 typedef struct _STK{
@@ -14,8 +20,7 @@ typedef struct _STK{
 
 	//Size in bytes of elements contained by the stack
 	size_t _element_size;
-	size_t _capacity;
-	void* _data;
+	Node* _stack;
 
 } Stack;
 
