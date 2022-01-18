@@ -3,3 +3,7 @@
 *.ilk
 *.obj
 vendors
+*.dot
+*.svg
+*.png
+experimental*

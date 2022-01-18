@@ -12,8 +12,8 @@
 				"/EHsc",
 				// "/Wall",//All warnings
 				"/Fe:",//Name executable
-				"${fileDirname}\\railcar.exe",//${fileBasenameNoExtension}.exe",
-				"railcar.c"//"${file}"
+				"${workspaceFolder}\\railcar.exe",//${fileBasenameNoExtension}.exe",
+				"src/*.c"//"${file}"
 			],
 			"problemMatcher": ["$msCompile"],
 			"group": {

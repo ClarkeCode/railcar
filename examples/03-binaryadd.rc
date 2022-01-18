@@ -7,11 +7,18 @@
 //  0000 0001
 //  1110 1111
 //  1111 0000
+
+
+  13
+  17
+  0
+o====o
+
 r
 	(vr(vw0)(vw1)!^)
 	(2vw1!^)
 
-6[>
+[>
 	r
 	(
 		vr(vw0)(vw1)
@@ -29,4 +36,9 @@ r
 		)
 	)
 	!^
-]
+6]
+
+2vd
+
+//1^ fill a byte with 1's and insert it above selected byte in datastack
+//0v fill a byte with 0's and insert it below selected byte in datastack
